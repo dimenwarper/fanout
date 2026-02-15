@@ -47,11 +47,41 @@ flowchart TD
 
 ## Install
 
+### Local development
+
 ```bash
+git clone https://github.com/dimenwarper/fanout.git
+cd fanout
 uv sync
 ```
 
-Requires an `OPENROUTER_API_KEY` environment variable (or a `.env` file in your project root).
+This installs fanout into a local virtualenv. Use `uv run fanout` to run it.
+
+### System-wide install (CLI + Claude Code skills)
+
+The install script does two things: installs the `fanout` CLI globally via `uv tool`, and registers `/fanout` and `/fanout-setup` as slash commands in Claude Code.
+
+```bash
+git clone https://github.com/dimenwarper/fanout.git
+cd fanout
+./install.sh
+```
+
+After install:
+- **`fanout`** is available as a global command from any directory
+- **`/fanout`** is available as a slash command in any Claude Code session — it walks you through running a fanout loop
+- **`/fanout-setup`** configures your `.env` with API keys
+
+To uninstall:
+
+```bash
+uv tool uninstall fanout
+rm ~/.claude/commands/fanout.md ~/.claude/commands/fanout-setup.md
+```
+
+### API key
+
+Requires an `OPENROUTER_API_KEY` environment variable (or a `.env` file in your project root). Get one at [openrouter.ai/keys](https://openrouter.ai/keys).
 
 ## Quick start
 
