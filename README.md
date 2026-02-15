@@ -95,6 +95,62 @@ uv run fanout run \
   -M coding -N 3 --eval-script /tmp/test_sort.sh --materializer file
 ```
 
+## Examples
+
+### 1. Discover available plugins
+
+```bash
+# List materializers (file, stdin, worktree)
+uv run fanout list-materializers
+
+# List evaluators (latency, cost, accuracy, script)
+uv run fanout list-evaluators
+
+# List selection strategies
+uv run fanout list-strategies
+
+# List model sets (builtins + user-defined)
+uv run fanout list-model-sets
+```
+
+### 2. Code generation with script evaluation
+
+Write a sorting function across multiple models and score each solution with a real test:
+
+```bash
+# Create an eval script that tests the generated function
+cat > /tmp/test_sort.sh << 'EVAL'
+#!/bin/bash
+python3 -c "
+import sys; sys.path.insert(0, '.')
+exec(open(sys.argv[1]).read())
+print(1.0 if sort_records([{'date':'2025-01-02'},{'date':'2025-01-01'}]) == [{'date':'2025-01-01'},{'date':'2025-01-02'}] else 0.0)
+" "$1"
+EVAL
+chmod +x /tmp/test_sort.sh
+
+# Fan out across a coding model set, evaluate with the test script
+uv run fanout run \
+  "Write a Python function sort_records(records: list[dict]) -> list[dict] that sorts by the date field." \
+  -M coding -N 5 --eval-script /tmp/test_sort.sh --materializer file --file-ext .py
+```
+
+Each solution is written to `.fanout/workspace/<run_id>/<solution_id>/output.py`, then `/tmp/test_sort.sh` is called with that path. The last line of stdout (`1.0` or `0.0`) becomes the score.
+
+### 3. Multi-round evolutionary refinement
+
+Run multiple rounds so the best outputs from each generation seed the next:
+
+```bash
+uv run fanout run "Write a concise Python function that finds all prime factors of an integer n." \
+  -m openai/gpt-4o-mini -m anthropic/claude-3-haiku -m google/gemini-flash-1.5 \
+  -e latency -e cost \
+  -s top-k --k 2 \
+  -r 3 -n 2
+```
+
+This runs 3 rounds. Each round samples 2 responses per model (6 total), scores them on latency and cost, selects the top 2, and uses those as parents for the next round.
+
 ## Commands
 
 | Command | Description |
