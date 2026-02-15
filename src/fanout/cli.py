@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from pathlib import Path
+from typing import Annotated, Any, Optional
 
+from dotenv import load_dotenv
 import typer
+
+# Load .env from cwd (project root) before anything reads env vars
+load_dotenv(Path.cwd() / ".env")
 from rich.console import Console
 from rich.table import Table
 
 from fanout.db.models import Run
 from fanout.evaluators import list_evaluators
+from fanout.materializers import list_materializers
+from fanout.model_sets import load_model_sets
 from fanout.providers.openrouter import SamplingConfig
 from fanout.store import Store
 from fanout.strategies import list_strategies
@@ -32,14 +39,20 @@ def _get_store() -> Store:
 def sample(
     prompt: Annotated[str, typer.Argument(help="The prompt to send to models")],
     model: Annotated[Optional[list[str]], typer.Option("-m", "--model", help="Model to sample (repeatable)")] = None,
+    model_set: Annotated[Optional[str], typer.Option("-M", "--model-set", help="Named model set to sample from")] = None,
     temperature: Annotated[float, typer.Option(help="Sampling temperature")] = 0.7,
     max_tokens: Annotated[int, typer.Option(help="Max tokens per response")] = 2048,
     n_per_model: Annotated[int, typer.Option("-n", help="Samples per model")] = 1,
+    n_samples: Annotated[int, typer.Option("-N", "--n-samples", help="Total samples when using a model set")] = 5,
     run_id: Annotated[Optional[str], typer.Option(help="Existing run ID to add to")] = None,
     round_num: Annotated[int, typer.Option(help="Round number")] = 0,
+    eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
+    materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
+    file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
 ) -> None:
     """Fan out a prompt to one or more models."""
+    from fanout.evaluate import evaluate_solutions
     from fanout.sample import sample as do_sample
 
     store = _get_store()
@@ -54,8 +67,19 @@ def sample(
     config = SamplingConfig(
         models=models, temperature=temperature,
         max_tokens=max_tokens, n_per_model=n_per_model,
+        model_set=model_set, n_samples=n_samples,
     )
     solutions = do_sample(prompt, config, store, run_id, round_num, api_key=api_key)
+
+    # If --eval-script is provided, run the script evaluator automatically
+    if eval_script:
+        context = {
+            "eval_script": eval_script,
+            "materializer": materializer,
+            "file_extension": file_ext,
+        }
+        evals = evaluate_solutions(solutions, ["script"], store, context)
+        console.print(f"[bold green]Script evaluator:[/] {len(evals)} evaluations")
 
     table = Table(title=f"Sampled {len(solutions)} solutions")
     table.add_column("ID", style="cyan")
@@ -154,14 +178,19 @@ def select(
 def run_loop(
     prompt: Annotated[str, typer.Argument(help="The prompt to send")],
     model: Annotated[Optional[list[str]], typer.Option("-m", "--model", help="Model (repeatable)")] = None,
+    model_set: Annotated[Optional[str], typer.Option("-M", "--model-set", help="Named model set to sample from")] = None,
     evaluator: Annotated[Optional[list[str]], typer.Option("-e", "--evaluator", help="Evaluator (repeatable)")] = None,
     strategy: Annotated[str, typer.Option("-s", "--strategy", help="Selection strategy")] = "top-k",
     rounds: Annotated[int, typer.Option("-r", "--rounds", help="Number of evolutionary rounds")] = 1,
     n_per_model: Annotated[int, typer.Option("-n", help="Samples per model per round")] = 1,
+    n_samples: Annotated[int, typer.Option("-N", "--n-samples", help="Total samples when using a model set")] = 5,
     k: Annotated[int, typer.Option(help="Selection size")] = 3,
     temperature: Annotated[float, typer.Option(help="Sampling temperature")] = 0.7,
     max_tokens: Annotated[int, typer.Option(help="Max tokens per response")] = 2048,
     reference: Annotated[Optional[str], typer.Option(help="Reference answer for accuracy evaluator")] = None,
+    eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
+    materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
+    file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
 ) -> None:
     """Full evolutionary loop: sample → evaluate → select × N rounds."""
@@ -173,15 +202,31 @@ def run_loop(
     models = model or ["openai/gpt-4o-mini"]
     evaluator_names = evaluator or ["latency", "cost"]
 
+    # If --eval-script provided, add script evaluator
+    if eval_script:
+        if "script" not in evaluator_names:
+            evaluator_names.append("script")
+
     run = Run(prompt=prompt, total_rounds=rounds)
     store.save_run(run)
-    console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), {len(models)} model(s)")
+    if model_set:
+        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), model set: {model_set}")
+    else:
+        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), {len(models)} model(s)")
 
     config = SamplingConfig(
         models=models, temperature=temperature,
         max_tokens=max_tokens, n_per_model=n_per_model,
+        model_set=model_set, n_samples=n_samples,
     )
-    context = {"reference": reference} if reference else None
+    context: dict[str, Any] | None = {}
+    if reference:
+        context["reference"] = reference
+    if eval_script:
+        context["eval_script"] = eval_script
+        context["materializer"] = materializer
+        context["file_extension"] = file_ext
+    context = context or None
     parent_ids: list[str] | None = None
 
     for rnd in range(rounds):
@@ -264,6 +309,19 @@ def list_evaluators_cmd() -> None:
     console.print(table)
 
 
+# ── list-materializers ────────────────────────────────────
+
+@app.command(name="list-materializers")
+def list_materializers_cmd() -> None:
+    """List available materializers."""
+    table = Table(title="Materializers")
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+    for name, cls in sorted(list_materializers().items()):
+        table.add_row(name, cls.description)
+    console.print(table)
+
+
 # ── list-strategies ──────────────────────────────────────
 
 @app.command(name="list-strategies")
@@ -275,3 +333,22 @@ def list_strategies_cmd() -> None:
     for name, cls in sorted(list_strategies().items()):
         table.add_row(name, cls.description)
     console.print(table)
+
+
+# ── list-model-sets ──────────────────────────────────────
+
+@app.command(name="list-model-sets")
+def list_model_sets_cmd() -> None:
+    """List available model sets (builtins + user-defined)."""
+    sets = load_model_sets()
+
+    for name, ms in sorted(sets.items()):
+        table = Table(title=f"Model set: {name}")
+        table.add_column("Model", style="cyan")
+        table.add_column("Weight", justify="right")
+        total_weight = sum(e.weight for e in ms.models)
+        for entry in ms.models:
+            pct = entry.weight / total_weight * 100
+            table.add_row(entry.model, f"{entry.weight:.1f} ({pct:.0f}%)")
+        console.print(table)
+        console.print()

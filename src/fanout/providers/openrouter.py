@@ -21,6 +21,8 @@ class SamplingConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 2048
     n_per_model: int = 1
+    model_set: str | None = None
+    n_samples: int = 5
 
 
 class OpenRouterClient:
@@ -43,14 +45,28 @@ class OpenRouterClient:
         solutions: list[Solution] = []
         parents = parent_solution_ids or []
 
-        async with httpx.AsyncClient(timeout=120) as client:
-            for model in config.models:
-                for i in range(config.n_per_model):
+        if config.model_set:
+            from fanout.model_sets import get_model_set, pick_models
+
+            ms = get_model_set(config.model_set)
+            drawn_models = pick_models(ms, config.n_samples)
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                for i, model in enumerate(drawn_models):
                     parent_id = parents[i % len(parents)] if parents else None
                     sol = await self._call_model(
                         client, prompt, model, config, run_id, round_num, parent_id,
                     )
                     solutions.append(sol)
+        else:
+            async with httpx.AsyncClient(timeout=120) as client:
+                for model in config.models:
+                    for i in range(config.n_per_model):
+                        parent_id = parents[i % len(parents)] if parents else None
+                        sol = await self._call_model(
+                            client, prompt, model, config, run_id, round_num, parent_id,
+                        )
+                        solutions.append(sol)
 
         return solutions
 
