@@ -27,7 +27,7 @@ flowchart TD
     subgraph REDUCE ["Reduce — evaluate & select"]
         S --> E["Evaluators\n(latency, cost, accuracy, script)"]
         E --> SC["Scored Solutions"]
-        SC --> SEL["Selection Strategy\n(top-k, weighted, map-elites, island)"]
+        SC --> SEL["Selection Strategy\n(top-k, weighted, map-elites, island, rsa)"]
     end
 
     SEL --> |"Round N+1\nselected solutions\nseed next generation"| F
@@ -181,6 +181,22 @@ uv run fanout run "Write a concise Python function that finds all prime factors 
 
 This runs 3 rounds. Each round samples 2 responses per model (6 total), scores them on latency and cost, selects the top 2, and uses those as parents for the next round.
 
+### 4. Recursive Self-Aggregation (RSA)
+
+RSA is an AlphaEvolve-style strategy where, after round 1, each new solution is generated from a prompt that includes K randomly subsampled parent solutions. The model is asked to synthesize an improvement from those parents rather than starting from scratch.
+
+```bash
+uv run fanout run "Write a Python fibonacci function that handles edge cases" \
+  -m openai/gpt-4o-mini -n 2 \
+  -s rsa --k-agg 2 -r 3 \
+  -e latency -e cost
+```
+
+- **Round 1:** Independent sampling (same as any other strategy).
+- **Round 2+:** Each sample receives the original task plus K parent outputs, with instructions to combine their best ideas. Different samples see different random subsets of parents.
+
+The `--k-agg` flag controls how many parent solutions each new prompt includes (default 3). Unlike other strategies, RSA doesn't filter by score — all candidates survive, and improvement comes from aggregation rather than selection pressure.
+
 ## Commands
 
 | Command | Description |
@@ -222,6 +238,7 @@ Materializers control how a solution's output is presented to an eval script.
 | `weighted` | Sample with probability proportional to score |
 | `map-elites` | Best solution per behavioral dimension cell |
 | `island` | Subpopulation evolution with migration |
+| `rsa` | Recursive Self-Aggregation — feed K parent solutions back into each prompt |
 
 ## Architecture
 
@@ -253,7 +270,8 @@ src/fanout/
     ├── top_k.py           # Top-K selection
     ├── weighted.py        # Weighted random selection
     ├── map_elites.py      # MAP-Elites diversity selection
-    └── island.py          # Island model with migration
+    ├── island.py          # Island model with migration
+    └── rsa.py             # Recursive Self-Aggregation
 ```
 
 Data is stored in `.fanout/fanout.db` (SQLite, WAL mode) in the project directory.
