@@ -21,6 +21,21 @@ class BaseStrategy(ABC):
         """Select from scored candidates for the next round."""
         ...
 
+    def build_prompts(
+        self,
+        original_prompt: str,
+        selected: list[SolutionWithScores],
+        round_num: int,
+        n_samples: int,
+        **kwargs: Any,
+    ) -> str | list[str]:
+        """Build prompt(s) for the next round.
+
+        Returns str to broadcast one prompt to all samples (default).
+        Returns list[str] to send per-solution prompts.
+        """
+        return original_prompt
+
 
 def register_strategy(cls: type[BaseStrategy]) -> type[BaseStrategy]:
     """Class decorator to register a strategy."""

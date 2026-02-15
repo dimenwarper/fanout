@@ -35,15 +35,20 @@ class OpenRouterClient:
 
     async def sample(
         self,
-        prompt: str,
+        prompt: str | list[str],
         config: SamplingConfig,
         run_id: str = "",
         round_num: int = 0,
         parent_solution_ids: list[str] | None = None,
     ) -> list[Solution]:
-        """Fan out prompt to all configured models, return Solutions."""
+        """Fan out prompt to all configured models, return Solutions.
+
+        If prompt is a list[str], each entry is used for one solution in order.
+        If prompt is a str, it is broadcast to all solutions.
+        """
         solutions: list[Solution] = []
         parents = parent_solution_ids or []
+        per_solution_prompts = isinstance(prompt, list)
 
         if config.model_set:
             from fanout.model_sets import get_model_set, pick_models
@@ -51,22 +56,39 @@ class OpenRouterClient:
             ms = get_model_set(config.model_set)
             drawn_models = pick_models(ms, config.n_samples)
 
+            if per_solution_prompts and len(prompt) != len(drawn_models):
+                raise ValueError(
+                    f"Per-solution prompts length ({len(prompt)}) doesn't match "
+                    f"expected sample count ({len(drawn_models)})"
+                )
+
             async with httpx.AsyncClient(timeout=120) as client:
                 for i, model in enumerate(drawn_models):
                     parent_id = parents[i % len(parents)] if parents else None
+                    p = prompt[i] if per_solution_prompts else prompt
                     sol = await self._call_model(
-                        client, prompt, model, config, run_id, round_num, parent_id,
+                        client, p, model, config, run_id, round_num, parent_id,
                     )
                     solutions.append(sol)
         else:
+            total = len(config.models) * config.n_per_model
+            if per_solution_prompts and len(prompt) != total:
+                raise ValueError(
+                    f"Per-solution prompts length ({len(prompt)}) doesn't match "
+                    f"expected sample count ({total})"
+                )
+
             async with httpx.AsyncClient(timeout=120) as client:
+                idx = 0
                 for model in config.models:
                     for i in range(config.n_per_model):
                         parent_id = parents[i % len(parents)] if parents else None
+                        p = prompt[idx] if per_solution_prompts else prompt
                         sol = await self._call_model(
-                            client, prompt, model, config, run_id, round_num, parent_id,
+                            client, p, model, config, run_id, round_num, parent_id,
                         )
                         solutions.append(sol)
+                        idx += 1
 
         return solutions
 

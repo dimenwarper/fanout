@@ -10,7 +10,7 @@ from fanout.store import Store
 
 
 async def sample_async(
-    prompt: str,
+    prompt: str | list[str],
     config: SamplingConfig,
     store: Store,
     run_id: str,
@@ -33,7 +33,7 @@ async def sample_async(
 
 
 def sample(
-    prompt: str,
+    prompt: str | list[str],
     config: SamplingConfig,
     store: Store,
     run_id: str,

@@ -191,12 +191,14 @@ def run_loop(
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
+    k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 3,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
 ) -> None:
     """Full evolutionary loop: sample → evaluate → select × N rounds."""
     from fanout.evaluate import evaluate_solutions
     from fanout.sample import sample as do_sample
     from fanout.select import select_solutions
+    from fanout.strategies.base import get_strategy
 
     store = _get_store()
     models = model or ["openai/gpt-4o-mini"]
@@ -228,12 +230,14 @@ def run_loop(
         context["file_extension"] = file_ext
     context = context or None
     parent_ids: list[str] | None = None
+    strategy_instance = get_strategy(strategy)
+    current_prompt: str | list[str] = prompt
 
     for rnd in range(rounds):
         console.rule(f"[bold]Round {rnd + 1}/{rounds}[/]")
 
         # Sample
-        solutions = do_sample(prompt, config, store, run.id, rnd, parent_ids, api_key)
+        solutions = do_sample(current_prompt, config, store, run.id, rnd, parent_ids, api_key)
         console.print(f"  Sampled {len(solutions)} solutions")
 
         # Evaluate
@@ -250,6 +254,17 @@ def run_loop(
 
         store.update_run_round(run.id, rnd + 1)
         parent_ids = [s.solution.id for s in selected]
+
+        # Build prompts for next round
+        if rnd < rounds - 1:
+            n_expected = config.n_samples if config.model_set else len(config.models) * config.n_per_model
+            current_prompt = strategy_instance.build_prompts(
+                original_prompt=prompt,
+                selected=selected,
+                round_num=rnd,
+                n_samples=n_expected,
+                k_agg=k_agg,
+            )
 
     console.print(f"\n[bold green]Done.[/] Run ID: {run.id}")
 
