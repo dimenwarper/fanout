@@ -1,45 +1,34 @@
-#!/bin/bash
-# CodeEvolve eval script for fanout.
-#
-# Usage: ./eval.sh <solution_file> [task_name]
-#
-# task_name: circle_packing | kissing_number | first_autocorr | heilbronn_triangle
-#
-# The solution file must define the task's entry function (e.g., circle_packing26()).
-# Prints a score (0.0-1.0) on the last line, based on benchmark_ratio.
+#!/usr/bin/env python3
+"""CodeEvolve eval script for fanout.
 
-set -euo pipefail
+Usage: ./eval.py <solution_file> [task_name]
 
-SOLUTION_FILE="$1"
-TASK_NAME="${2:-circle_packing}"
+task_name: circle_packing | kissing_number | first_autocorr | heilbronn_triangle
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+The solution file must define the task's entry function (e.g., circle_packing26()).
+Prints a score (0.0-1.0) on the last line, based on benchmark_ratio.
+"""
 
-uv run --project "$PROJECT_ROOT" --extra benchmarks python3 - "$SOLUTION_FILE" "$TASK_NAME" <<'PYEOF'
-import sys
+from __future__ import annotations
+
 import importlib.util
-import numpy as np
+import sys
 from itertools import combinations
 
-def load_module(path):
+import numpy as np
+
+
+def load_module(path: str):
     spec = importlib.util.spec_from_file_location("solution", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
-solution_path = sys.argv[1]
-task_name = sys.argv[2]
 
-try:
-    sol = load_module(solution_path)
-except Exception as e:
-    print(f"Load error: {e}", file=sys.stderr)
-    print("0.0")
-    sys.exit(0)
+# ── Evaluators ──────────────────────────────────────────
 
 
-def eval_circle_packing(sol):
+def eval_circle_packing(sol) -> float:
     BENCHMARK = 2.6358627564136983
     TOL = 1e-6
 
@@ -54,12 +43,10 @@ def eval_circle_packing(sol):
 
     xs, ys, rs = result[:, 0], result[:, 1], result[:, 2]
 
-    # Check non-negative radii
     if np.any(rs < 0) or np.any(np.isnan(result)):
         print("Negative radii or NaN", file=sys.stderr)
         return 0.0
 
-    # Check circles inside unit square
     if np.any(xs - rs < -TOL) or np.any(xs + rs > 1 + TOL):
         print("Circle outside square (x)", file=sys.stderr)
         return 0.0
@@ -67,9 +54,8 @@ def eval_circle_packing(sol):
         print("Circle outside square (y)", file=sys.stderr)
         return 0.0
 
-    # Check no overlaps
     for i, j in combinations(range(26), 2):
-        dist = np.sqrt((xs[i] - xs[j])**2 + (ys[i] - ys[j])**2)
+        dist = np.sqrt((xs[i] - xs[j]) ** 2 + (ys[i] - ys[j]) ** 2)
         if dist < rs[i] + rs[j] - TOL:
             print(f"Overlap between circles {i} and {j}", file=sys.stderr)
             return 0.0
@@ -79,7 +65,7 @@ def eval_circle_packing(sol):
     return min(1.0, ratio)
 
 
-def eval_kissing_number(sol):
+def eval_kissing_number(sol) -> float:
     BENCHMARK = 593
 
     if not hasattr(sol, "kissing_number11"):
@@ -94,7 +80,6 @@ def eval_kissing_number(sol):
     points = points.astype(int)
     n = len(points)
 
-    # Check no zero vector
     norms = np.linalg.norm(points, axis=1)
     if np.any(norms == 0):
         print("Contains zero vector", file=sys.stderr)
@@ -102,7 +87,6 @@ def eval_kissing_number(sol):
 
     max_norm = np.max(norms)
 
-    # Check min pairwise distance >= max norm
     min_dist = float("inf")
     for i, j in combinations(range(n), 2):
         d = np.linalg.norm(points[i] - points[j])
@@ -117,7 +101,7 @@ def eval_kissing_number(sol):
     return min(1.0, ratio)
 
 
-def eval_first_autocorr(sol):
+def eval_first_autocorr(sol) -> float:
     BENCHMARK_INV_C1 = 0.6653
 
     if not hasattr(sol, "first_autocorrelation"):
@@ -139,7 +123,7 @@ def eval_first_autocorr(sol):
         return 0.0
 
     b = np.convolve(a, a, "full")
-    c1 = 2 * len(a) * np.max(b) / (s ** 2)
+    c1 = 2 * len(a) * np.max(b) / (s**2)
     inv_c1 = 1.0 / c1
 
     ratio = inv_c1 / BENCHMARK_INV_C1
@@ -147,7 +131,7 @@ def eval_first_autocorr(sol):
     return min(1.0, ratio)
 
 
-def eval_heilbronn(sol):
+def eval_heilbronn(sol) -> float:
     BENCHMARK = 0.036529889880030156
     TOL = 1e-6
 
@@ -160,19 +144,16 @@ def eval_heilbronn(sol):
         print(f"Bad shape: {getattr(points, 'shape', 'N/A')}", file=sys.stderr)
         return 0.0
 
-    # Check all points inside equilateral triangle: (0,0), (1,0), (0.5, sqrt(3)/2)
     h = np.sqrt(3) / 2
     for i, (x, y) in enumerate(points):
         if y < -TOL or y > h + TOL:
             print(f"Point {i} outside triangle (y)", file=sys.stderr)
             return 0.0
-        # Left edge: y <= sqrt(3)*x, right edge: y <= sqrt(3)*(1-x)
         if y > np.sqrt(3) * x + TOL or y > np.sqrt(3) * (1 - x) + TOL:
             print(f"Point {i} outside triangle", file=sys.stderr)
             return 0.0
 
-    # Minimum triangle area over all C(11,3) triples
-    tri_area = h / 2  # area of equilateral triangle
+    tri_area = h / 2
     min_area = float("inf")
     for i, j, k in combinations(range(11), 3):
         ax, ay = points[i]
@@ -194,16 +175,36 @@ EVALUATORS = {
     "heilbronn_triangle": eval_heilbronn,
 }
 
-if task_name not in EVALUATORS:
-    print(f"Unknown task: {task_name}. Available: {list(EVALUATORS)}", file=sys.stderr)
-    print("0.0")
-    sys.exit(0)
 
-try:
-    score = EVALUATORS[task_name](sol)
-except Exception as e:
-    print(f"Eval error: {e}", file=sys.stderr)
-    score = 0.0
+def main():
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <solution_file> [task_name]", file=sys.stderr)
+        print("0.0")
+        sys.exit(0)
 
-print(f"{score:.4f}")
-PYEOF
+    solution_path = sys.argv[1]
+    task_name = sys.argv[2] if len(sys.argv) > 2 else "circle_packing"
+
+    try:
+        sol = load_module(solution_path)
+    except Exception as e:
+        print(f"Load error: {e}", file=sys.stderr)
+        print("0.0")
+        sys.exit(0)
+
+    if task_name not in EVALUATORS:
+        print(f"Unknown task: {task_name}. Available: {list(EVALUATORS)}", file=sys.stderr)
+        print("0.0")
+        sys.exit(0)
+
+    try:
+        score = EVALUATORS[task_name](sol)
+    except Exception as e:
+        print(f"Eval error: {e}", file=sys.stderr)
+        score = 0.0
+
+    print(f"{score:.4f}")
+
+
+if __name__ == "__main__":
+    main()

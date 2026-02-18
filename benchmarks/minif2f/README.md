@@ -27,10 +27,10 @@ curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf 
 ## Eval
 
 ```bash
-chmod +x eval.sh
+chmod +x eval.py
 
 # Score a single proof
-./eval.sh solution.lean
+./eval.py solution.lean
 
 # With fanout RSA
 fanout run "$(cat tasks/imo_1959_p1.lean)
@@ -38,7 +38,7 @@ fanout run "$(cat tasks/imo_1959_p1.lean)
 Replace sorry with a valid Lean 4 proof. Output only the complete .lean file." \
   -m anthropic/claude-sonnet-4 -n 3 \
   -s rsa --k-agg 2 -r 3 \
-  --eval-script "./eval.sh" --materializer file --file-ext .lean \
+  --eval-script "./eval.py" --materializer file --file-ext .lean \
   -e script
 ```
 

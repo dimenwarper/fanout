@@ -14,13 +14,13 @@ Algorithm discovery and optimization tasks adapted from [CodeEvolve](https://git
 ## Eval
 
 ```bash
-chmod +x eval.sh
+chmod +x eval.py
 
 # Score a solution for a specific task
-./eval.sh solution.py circle_packing
-./eval.sh solution.py kissing_number
-./eval.sh solution.py first_autocorr
-./eval.sh solution.py heilbronn_triangle
+./eval.py solution.py circle_packing
+./eval.py solution.py kissing_number
+./eval.py solution.py first_autocorr
+./eval.py solution.py heilbronn_triangle
 
 # With fanout RSA (circle packing example)
 fanout run "$(cat tasks/circle_packing.py)
@@ -28,7 +28,7 @@ fanout run "$(cat tasks/circle_packing.py)
 Improve circle_packing26() to maximize sum of radii for 26 non-overlapping circles in the unit square. Output only the Python file." \
   -m openai/gpt-4o-mini -n 3 \
   -s rsa --k-agg 2 -r 5 \
-  --eval-script "./eval.sh" --materializer file --file-ext .py \
+  --eval-script "./eval.py" --materializer file --file-ext .py \
   -e script
 ```
 

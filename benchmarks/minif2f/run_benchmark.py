@@ -37,7 +37,7 @@ from fanout.strategies.base import get_strategy
 console = Console()
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
-EVAL_SCRIPT = str(BENCHMARK_DIR / "eval.sh")
+EVAL_SCRIPT = str(BENCHMARK_DIR / "eval.py")
 
 TASKS = {
     "imo_1959_p1": {

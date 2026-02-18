@@ -53,13 +53,13 @@ uv run --extra benchmarks python benchmarks/minif2f/run_benchmark.py \
 
 ## Low-level eval scripts
 
-Each benchmark also has an `eval.sh` for scoring individual solutions, compatible with fanout's `--eval-script` flag:
+Each benchmark also has an `eval.py` for scoring individual solutions, compatible with fanout's `--eval-script` flag:
 
 ```bash
 # Score a single solution
-benchmarks/codeevolve/eval.sh solution.py circle_packing
-benchmarks/kernelbench/eval.sh solution.py tasks/matmul.py
-benchmarks/minif2f/eval.sh proof.lean
+benchmarks/codeevolve/eval.py solution.py circle_packing
+benchmarks/kernelbench/eval.py solution.py tasks/matmul.py
+benchmarks/minif2f/eval.py proof.lean
 ```
 
 ## Structure
@@ -69,17 +69,17 @@ benchmarks/
 ├── README.md
 ├── kernelbench/
 │   ├── README.md
-│   ├── eval.sh              # Correctness + speedup scorer
+│   ├── eval.py              # Correctness + speedup scorer
 │   ├── run_benchmark.py     # Full benchmark runner
 │   └── tasks/               # 5 Level-1 PyTorch reference ops
 ├── codeevolve/
 │   ├── README.md
-│   ├── eval.sh              # Constraint validation + benchmark ratio
+│   ├── eval.py              # Constraint validation + benchmark ratio
 │   ├── run_benchmark.py     # Full benchmark runner
 │   └── tasks/               # 4 optimization problems with baselines
 └── minif2f/
     ├── README.md
-    ├── eval.sh              # Lean 4 typecheck (binary)
+    ├── eval.py              # Lean 4 typecheck (binary)
     ├── run_benchmark.py     # Full benchmark runner
     └── tasks/               # 5 olympiad theorem statements
 ```
@@ -88,7 +88,7 @@ benchmarks/
 
 A benchmark needs:
 1. **Task files** in `tasks/` — the problem definition (prompt source material)
-2. **`eval.sh`** — takes a solution file path as `$1`, prints a score (0.0-1.0) on the last line of stdout
+2. **`eval.py`** — takes a solution file path as `$1`, prints a score (0.0-1.0) on the last line of stdout
 3. **`run_benchmark.py`** — iterates tasks, builds prompts, calls fanout internals, prints results
 4. **`README.md`** — how to run it, what's needed
 

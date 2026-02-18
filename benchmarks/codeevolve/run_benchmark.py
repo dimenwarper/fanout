@@ -41,7 +41,7 @@ from fanout.strategies.base import get_strategy
 console = Console()
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
-EVAL_SCRIPT = BENCHMARK_DIR / "eval.sh"
+EVAL_SCRIPT = BENCHMARK_DIR / "eval.py"
 
 TASKS = {
     "circle_packing": {
@@ -86,12 +86,12 @@ def build_prompt(task_name: str, task_info: dict) -> str:
 
 
 def make_task_eval_script(task_name: str) -> Path:
-    """Create a wrapper eval script that passes the task name to eval.sh."""
+    """Create a wrapper script that passes the task name to eval.py."""
     wrapper = tempfile.NamedTemporaryFile(
         mode="w", suffix=".sh", prefix=f"eval_{task_name}_", delete=False,
     )
     wrapper.write(f"#!/bin/bash\n")
-    wrapper.write(f'exec "{EVAL_SCRIPT}" "$1" {task_name}\n')
+    wrapper.write(f'exec python3 "{EVAL_SCRIPT}" "$1" {task_name}\n')
     wrapper.close()
     os.chmod(wrapper.name, os.stat(wrapper.name).st_mode | stat.S_IEXEC)
     return Path(wrapper.name)

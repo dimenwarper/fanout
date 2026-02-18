@@ -21,10 +21,10 @@ Given a PyTorch `Model` class, write a CUDA-optimized `ModelNew` class that prod
 Requires a CUDA-capable GPU with PyTorch.
 
 ```bash
-chmod +x eval.sh
+chmod +x eval.py
 
 # Score a single solution against a task
-./eval.sh solution.py tasks/matmul.py
+./eval.py solution.py tasks/matmul.py
 
 # With fanout RSA
 fanout run "$(cat tasks/matmul.py)
@@ -32,7 +32,7 @@ fanout run "$(cat tasks/matmul.py)
 Write a CUDA-optimized ModelNew class that replaces Model. Use torch.autograd.Function with custom CUDA kernels or triton. Output only the Python file with ModelNew." \
   -m openai/gpt-4o-mini -n 3 \
   -s rsa --k-agg 2 -r 3 \
-  --eval-script "./eval.sh" --materializer file --file-ext .py \
+  --eval-script "./eval.py" --materializer file --file-ext .py \
   -e script
 ```
 
