@@ -78,7 +78,7 @@ def build_prompt(task_name: str, task_info: dict) -> str:
         f"```lean\n{task_source}\n```\n\n"
         f"Replace `sorry` with a valid Lean 4 proof. The proof must typecheck with Mathlib.\n"
         f"Use appropriate Lean 4 tactics (omega, norm_num, ring, simp, linarith, etc.).\n\n"
-        f"Output only the complete .lean file with the proof filled in. Do not include sorry."
+        f"Do not include sorry."
     )
 
 

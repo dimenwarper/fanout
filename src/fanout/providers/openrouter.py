@@ -22,6 +22,15 @@ RETRY_BASE_DELAY = 1.0  # seconds
 _RETRYABLE = (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError)
 
 
+DEFAULT_SYSTEM_PROMPT = (
+    "You are a helpful assistant that solves tasks carefully.\n"
+    "You may think step-by-step, but you MUST place your final solution "
+    "inside <solution> and </solution> tags at the end of your response.\n"
+    "The content inside <solution> tags should be ONLY the deliverable "
+    "(code, proof, text, etc.) with no commentary or explanation."
+)
+
+
 class SamplingConfig(BaseModel):
     """Configuration for a sampling request."""
 
@@ -30,6 +39,7 @@ class SamplingConfig(BaseModel):
     max_tokens: int = 2048
     model_set: str | None = None
     n_samples: int = 5
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT
 
 
 class OpenRouterClient:
@@ -112,9 +122,14 @@ class OpenRouterClient:
         round_num: int,
         parent_solution_id: str | None,
     ) -> Solution:
+        messages: list[dict[str, str]] = []
+        if config.system_prompt:
+            messages.append({"role": "system", "content": config.system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": config.temperature,
             "max_tokens": config.max_tokens,
         }

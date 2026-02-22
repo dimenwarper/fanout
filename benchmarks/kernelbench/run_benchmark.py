@@ -79,8 +79,7 @@ def build_prompt(task_name: str, task_info: dict) -> str:
         f"- torch.autograd.Function with inline CUDA via torch.utils.cpp_extension\n"
         f"- Triton kernels (@triton.jit)\n"
         f"- Any PyTorch-compatible approach\n\n"
-        f"The ModelNew class must have the same __init__ signature and forward() interface as Model.\n"
-        f"Output only the complete Python file containing the ModelNew class and all its dependencies."
+        f"The ModelNew class must have the same __init__ signature and forward() interface as Model."
     )
 
 

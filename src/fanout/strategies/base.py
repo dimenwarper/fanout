@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from fanout.db.models import SolutionWithScores
+from fanout.materializers.file import extract_solution
 
 _REGISTRY: dict[str, type[BaseStrategy]] = {}
 
@@ -37,7 +38,7 @@ def build_annotated_prompt(
         if score == best_score:
             label += " \u2605 BEST"
         parts.append(f"=== {label} ===")
-        parts.append(parent.solution.output)
+        parts.append(extract_solution(parent.solution.output))
         parts.append("")
 
     parts.append("Provide your improved solution:")

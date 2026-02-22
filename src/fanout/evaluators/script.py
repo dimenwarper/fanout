@@ -9,6 +9,7 @@ from typing import Any
 from fanout.db.models import Solution
 from fanout.evaluators.base import BaseEvaluator, EvaluatorResult, register_evaluator
 from fanout.materializers.base import get_materializer
+from fanout.materializers.file import extract_solution
 from fanout.materializers.stdin import STDIN_SENTINEL
 
 
@@ -42,7 +43,7 @@ class ScriptEvaluator(BaseEvaluator):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout_bytes, stderr_bytes = await proc.communicate(input=solution.output.encode())
+                stdout_bytes, stderr_bytes = await proc.communicate(input=extract_solution(solution.output).encode())
             else:
                 proc = await asyncio.create_subprocess_exec(
                     eval_script, str(materialized_path),
