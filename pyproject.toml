@@ -16,8 +16,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
 benchmarks = [
     "numpy>=1.26",
+    "scipy>=1.12",
+    "sympy>=1.12",
+    "networkx>=3.2",
 ]
 
 [project.scripts]

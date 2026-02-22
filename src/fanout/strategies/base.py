@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from fanout.db.models import SolutionWithScores
-from fanout.materializers.file import extract_solution
+from fanout.solution_format import extract_solution
 
 _REGISTRY: dict[str, type[BaseStrategy]] = {}
 

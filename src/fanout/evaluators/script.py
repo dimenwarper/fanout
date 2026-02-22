@@ -9,7 +9,7 @@ from typing import Any
 from fanout.db.models import Solution
 from fanout.evaluators.base import BaseEvaluator, EvaluatorResult, register_evaluator
 from fanout.materializers.base import get_materializer
-from fanout.materializers.file import extract_solution
+from fanout.solution_format import extract_solution
 from fanout.materializers.stdin import STDIN_SENTINEL
 
 

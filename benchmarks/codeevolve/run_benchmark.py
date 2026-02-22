@@ -110,6 +110,7 @@ def run_task(
     k_agg: int,
     temperature: float,
     max_tokens: int,
+    solution_format: str = "code",
     eval_concurrency: int = 1,
     verbose: bool = False,
 ) -> dict[str, Any]:
@@ -139,6 +140,7 @@ def run_task(
             max_tokens=max_tokens,
             model_set=model_set,
             n_samples=n_samples,
+            solution_format=solution_format,
         )
         context: dict[str, Any] = {
             "eval_script": str(eval_wrapper),
@@ -228,6 +230,7 @@ def main():
     parser.add_argument("--k-agg", type=int, default=3, help="RSA aggregation size (default: 3)")
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--solution-format", default="code", help="Solution format: code, diff, raw (default: code)")
     parser.add_argument("-p", "--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
     args = parser.parse_args()
@@ -252,6 +255,7 @@ def main():
                 k_agg=args.k_agg,
                 temperature=args.temperature,
                 max_tokens=args.max_tokens,
+                solution_format=args.solution_format,
                 eval_concurrency=args.eval_concurrency,
                 verbose=args.verbose,
             )

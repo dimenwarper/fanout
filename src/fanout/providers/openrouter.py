@@ -12,6 +12,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from fanout.db.models import Solution
+from fanout.solution_format import get_format
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -22,15 +23,6 @@ RETRY_BASE_DELAY = 1.0  # seconds
 _RETRYABLE = (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError)
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a helpful assistant that solves tasks carefully.\n"
-    "You may think step-by-step, but you MUST place your final solution "
-    "inside <solution> and </solution> tags at the end of your response.\n"
-    "The content inside <solution> tags should be ONLY the deliverable "
-    "(code, proof, text, etc.) with no commentary or explanation."
-)
-
-
 class SamplingConfig(BaseModel):
     """Configuration for a sampling request."""
 
@@ -39,7 +31,7 @@ class SamplingConfig(BaseModel):
     max_tokens: int = 2048
     model_set: str | None = None
     n_samples: int = 5
-    system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    solution_format: str = "code"
 
 
 class OpenRouterClient:
@@ -123,8 +115,9 @@ class OpenRouterClient:
         parent_solution_id: str | None,
     ) -> Solution:
         messages: list[dict[str, str]] = []
-        if config.system_prompt:
-            messages.append({"role": "system", "content": config.system_prompt})
+        fmt = get_format(config.solution_format)
+        if fmt.system_prompt:
+            messages.append({"role": "system", "content": fmt.system_prompt})
         messages.append({"role": "user", "content": prompt})
 
         payload: dict[str, Any] = {

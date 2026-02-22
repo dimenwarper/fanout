@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fanout.db.models import Solution
 from fanout.materializers.base import BaseMaterializer, register_materializer
-from fanout.materializers.file import extract_solution
+from fanout.solution_format import extract_solution
 
 # Sentinel path returned to signal stdin piping to the script evaluator.
 STDIN_SENTINEL = Path("__stdin__")

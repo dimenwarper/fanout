@@ -2,34 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from fanout.db.models import Solution
 from fanout.materializers.base import BaseMaterializer, register_materializer
-
-
-def extract_solution(text: str) -> str:
-    """Extract the final solution from LLM output.
-
-    Looks for <solution>...</solution> tags first. Falls back to stripping
-    markdown code fences. Returns the raw text if neither is found.
-    """
-    # Try <solution> tags (last match wins, in case CoT contains earlier tags)
-    matches = re.findall(r"<solution>(.*?)</solution>", text, re.DOTALL)
-    if matches:
-        return strip_code_fences(matches[-1].strip())
-
-    # Fallback: strip code fences from the whole output
-    return strip_code_fences(text)
-
-
-def strip_code_fences(text: str) -> str:
-    """Strip markdown code fences (```python ... ```) from LLM output."""
-    stripped = text.strip()
-    stripped = re.sub(r"^```[a-zA-Z]*\n?", "", stripped)
-    stripped = re.sub(r"\n?```$", "", stripped.strip())
-    return stripped
+from fanout.solution_format import extract_solution
 
 
 @register_materializer

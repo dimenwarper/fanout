@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fanout.db.models import Solution
 from fanout.materializers.base import BaseMaterializer, register_materializer
+from fanout.solution_format import extract_solution
 
 
 async def _run(cmd: list[str], **kwargs) -> asyncio.subprocess.Process:
@@ -37,7 +38,7 @@ class WorktreeMaterializer(BaseMaterializer):
 
         # Write the diff and apply it
         diff_path = workspace / "__fanout_patch.diff"
-        diff_path.write_text(solution.output)
+        diff_path.write_text(extract_solution(solution.output))
 
         proc = await _run(["git", "apply", str(diff_path)], cwd=workspace)
         if proc.returncode != 0:

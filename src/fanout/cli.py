@@ -61,6 +61,7 @@ def sample(
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
+    solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show solution previews with syntax highlighting")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
@@ -84,6 +85,7 @@ def sample(
         models=models, temperature=temperature,
         max_tokens=max_tokens,
         model_set=model_set, n_samples=n_samples,
+        solution_format=solution_format,
     )
     solutions = do_sample(prompt, config, store, run_id, round_num, api_key=api_key)
 
@@ -228,6 +230,7 @@ def run_loop(
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 3,
+    solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
@@ -260,6 +263,7 @@ def run_loop(
         models=models, temperature=temperature,
         max_tokens=max_tokens,
         model_set=model_set, n_samples=n_samples,
+        solution_format=solution_format,
     )
     context: dict[str, Any] | None = {}
     if reference:
