@@ -56,15 +56,23 @@ def _build_aggregation_prompt(
     original_prompt: str,
     parents: list[SolutionWithScores],
 ) -> str:
+    parents_sorted = sorted(parents, key=lambda p: p.aggregate_score, reverse=True)
+    best_score = parents_sorted[0].aggregate_score if parents_sorted else 0.0
+
     parts = [
         f"Original task: {original_prompt}",
         "",
-        f"You are shown {len(parents)} previous solutions. Analyze them and produce an improved solution "
-        "that combines their best ideas and addresses weaknesses.",
+        f"You are shown {len(parents_sorted)} previous solutions, ranked by score (higher = better, max 1.0).",
+        "Analyze them and produce an improved solution that combines their best ideas and addresses weaknesses.",
         "",
     ]
-    for i, parent in enumerate(parents, 1):
-        parts.append(f"=== Solution {i} ===")
+    for i, parent in enumerate(parents_sorted, 1):
+        score = parent.aggregate_score
+        model = parent.solution.model
+        label = f"Solution {i} (score: {score:.2f}, model: {model})"
+        if score == best_score:
+            label += " \u2605 BEST"
+        parts.append(f"=== {label} ===")
         parts.append(parent.solution.output)
         parts.append("")
 
