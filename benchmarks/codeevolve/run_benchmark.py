@@ -109,6 +109,7 @@ def run_task(
     k_agg: int,
     temperature: float,
     max_tokens: int,
+    verbose: bool = False,
 ) -> dict[str, Any]:
     """Run a single benchmark task through fanout and return results."""
     console.rule(f"[bold cyan]Task: {task_name}[/]")
@@ -117,6 +118,10 @@ def run_task(
 
     prompt = build_prompt(task_name, task_info)
     eval_wrapper = make_task_eval_script(task_name)
+
+    if verbose:
+        console.print(f"\n  [dim]Prompt ({len(prompt)} chars):[/]")
+        console.print(f"  [dim]{prompt[:200]}...[/]\n")
 
     try:
         store = Store()
@@ -153,6 +158,19 @@ def run_task(
             round_scores.append(top_score)
             best_score = max(best_score, top_score)
             console.print(f"top={top_score:.4f} best={best_score:.4f}")
+
+            if verbose:
+                for i, (sol, ev) in enumerate(zip(solutions, evals)):
+                    stderr = ev.details.get("stderr", "")
+                    stdout = ev.details.get("stdout", "")
+                    exit_code = ev.details.get("exit_code", "?")
+                    output_preview = sol.output[:150].replace("\n", "\\n")
+                    console.print(f"    [dim]Solution {i+1} [{sol.model}] score={ev.score:.4f} exit={exit_code}[/]")
+                    console.print(f"      [dim]output: {output_preview}...[/]")
+                    if stderr:
+                        console.print(f"      [dim]stderr: {stderr}[/]")
+                    if ev.score == 0.0 and stdout:
+                        console.print(f"      [dim]stdout: {stdout}[/]")
 
             store.update_run_round(run.id, rnd + 1)
             parent_ids = [s.solution.id for s in selected]
@@ -196,6 +214,7 @@ def main():
     parser.add_argument("--k-agg", type=int, default=3, help="RSA aggregation size (default: 3)")
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
     args = parser.parse_args()
 
     models = args.model or ["openai/gpt-4o-mini"]
@@ -217,6 +236,7 @@ def main():
                 k_agg=args.k_agg,
                 temperature=args.temperature,
                 max_tokens=args.max_tokens,
+                verbose=args.verbose,
             )
             results.append(result)
 
