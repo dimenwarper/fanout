@@ -11,6 +11,7 @@ import typer
 # Load .env from cwd (project root) before anything reads env vars
 load_dotenv(Path.cwd() / ".env")
 from rich.console import Console
+from rich.syntax import Syntax
 from rich.table import Table
 
 from fanout.db.models import Run
@@ -33,6 +34,18 @@ def _get_store() -> Store:
     return Store()
 
 
+_EXT_LEXERS = {
+    ".py": "python", ".js": "javascript", ".ts": "typescript",
+    ".rs": "rust", ".go": "go", ".c": "c", ".cpp": "cpp",
+    ".java": "java", ".lean": "lean4", ".sh": "bash",
+    ".cu": "cuda", ".html": "html", ".css": "css",
+}
+
+
+def _ext_to_lexer(file_ext: str) -> str:
+    return _EXT_LEXERS.get(file_ext, "text")
+
+
 # ── sample ────────────────────────────────────────────────
 
 @app.command()
@@ -48,9 +61,12 @@ def sample(
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show solution previews with syntax highlighting")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
 ) -> None:
     """Fan out a prompt to one or more models."""
+    from collections import Counter
+
     from fanout.evaluate import evaluate_solutions
     from fanout.sample import sample as do_sample
 
@@ -70,7 +86,13 @@ def sample(
     )
     solutions = do_sample(prompt, config, store, run_id, round_num, api_key=api_key)
 
+    # Show which models were sampled
+    model_counts = Counter(s.model for s in solutions)
+    models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
+    console.print(f"Sampled {len(solutions)} solutions [dim]\\[{models_str}][/]")
+
     # If --eval-script is provided, run the script evaluator automatically
+    evals = None
     if eval_script:
         context = {
             "eval_script": eval_script,
@@ -80,19 +102,34 @@ def sample(
         evals = evaluate_solutions(solutions, ["script"], store, context)
         console.print(f"[bold green]Script evaluator:[/] {len(evals)} evaluations")
 
-    table = Table(title=f"Sampled {len(solutions)} solutions")
-    table.add_column("ID", style="cyan")
-    table.add_column("Model")
-    table.add_column("Latency (ms)", justify="right")
-    table.add_column("Tokens", justify="right")
-    table.add_column("Output (preview)")
-    for sol in solutions:
-        table.add_row(
-            sol.id, sol.model, f"{sol.latency_ms:.0f}",
-            str(sol.prompt_tokens + sol.completion_tokens),
-            sol.output[:80] + ("..." if len(sol.output) > 80 else ""),
-        )
-    console.print(table)
+    if verbose:
+        lexer = _ext_to_lexer(file_ext)
+        for i, sol in enumerate(solutions):
+            score_str = ""
+            if evals:
+                score_str = f" score={evals[i].score:.4f}"
+            console.print(f"  [dim]Solution {i+1} [{sol.model}]{score_str} latency={sol.latency_ms:.0f}ms[/]")
+            preview_lines = sol.output[:500].splitlines()[:15]
+            preview = "\n".join(preview_lines)
+            console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
+            if evals:
+                stderr = evals[i].details.get("stderr", "")
+                if stderr:
+                    console.print(f"      [dim]stderr: {stderr}[/]")
+    else:
+        table = Table(title=f"Sampled {len(solutions)} solutions")
+        table.add_column("ID", style="cyan")
+        table.add_column("Model")
+        table.add_column("Latency (ms)", justify="right")
+        table.add_column("Tokens", justify="right")
+        table.add_column("Output (preview)")
+        for sol in solutions:
+            table.add_row(
+                sol.id, sol.model, f"{sol.latency_ms:.0f}",
+                str(sol.prompt_tokens + sol.completion_tokens),
+                sol.output[:80] + ("..." if len(sol.output) > 80 else ""),
+            )
+        console.print(table)
 
 
 # ── evaluate ──────────────────────────────────────────────
@@ -190,9 +227,12 @@ def run_loop(
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 3,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
 ) -> None:
     """Full evolutionary loop: sample → evaluate → select × N rounds."""
+    from collections import Counter
+
     from fanout.evaluate import evaluate_solutions
     from fanout.sample import sample as do_sample
     from fanout.select import select_solutions
@@ -210,9 +250,9 @@ def run_loop(
     run = Run(prompt=prompt, total_rounds=rounds)
     store.save_run(run)
     if model_set:
-        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), model set: {model_set}")
+        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), model set: {model_set} (n={n_samples})")
     else:
-        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), {len(models)} model(s)")
+        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), {len(models)} model(s), n={n_samples}")
 
     config = SamplingConfig(
         models=models, temperature=temperature,
@@ -230,13 +270,18 @@ def run_loop(
     parent_ids: list[str] | None = None
     strategy_instance = get_strategy(strategy)
     current_prompt: str | list[str] = prompt
+    best_score = 0.0
+    lexer = _ext_to_lexer(file_ext)
 
     for rnd in range(rounds):
         console.rule(f"[bold]Round {rnd + 1}/{rounds}[/]")
 
         # Sample
         solutions = do_sample(current_prompt, config, store, run.id, rnd, parent_ids, api_key)
-        console.print(f"  Sampled {len(solutions)} solutions")
+
+        model_counts = Counter(s.model for s in solutions)
+        models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
+        console.print(f"  Sampled {len(solutions)} solutions [dim]\\[{models_str}][/]")
 
         # Evaluate
         evals = evaluate_solutions(solutions, evaluator_names, store, context)
@@ -244,11 +289,30 @@ def run_loop(
 
         # Select
         selected = select_solutions(run.id, rnd, strategy, store, k=k)
-        console.print(f"  Selected {len(selected)} solutions ({strategy})")
+        top_score = selected[0].aggregate_score if selected else 0.0
+        best_score = max(best_score, top_score)
+        console.print(f"  Selected {len(selected)} ({strategy}) top={top_score:.4f} best={best_score:.4f}")
 
         # Show top
         for i, s in enumerate(selected[:3], 1):
             console.print(f"  #{i} [{s.solution.model}] score={s.aggregate_score:.3f}")
+
+        if verbose:
+            for i, sol in enumerate(solutions):
+                ev = evals[i] if i < len(evals) else None
+                score_str = f" score={ev.score:.4f}" if ev else ""
+                exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
+                console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
+                preview_lines = sol.output[:500].splitlines()[:15]
+                preview = "\n".join(preview_lines)
+                console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
+                if ev:
+                    stderr = ev.details.get("stderr", "")
+                    stdout = ev.details.get("stdout", "")
+                    if stderr:
+                        console.print(f"      [dim]stderr: {stderr}[/]")
+                    if ev.score == 0.0 and stdout:
+                        console.print(f"      [dim]stdout: {stdout}[/]")
 
         store.update_run_round(run.id, rnd + 1)
         parent_ids = [s.solution.id for s in selected]
@@ -263,7 +327,7 @@ def run_loop(
                 k_agg=k_agg,
             )
 
-    console.print(f"\n[bold green]Done.[/] Run ID: {run.id}")
+    console.print(f"\n[bold green]Done.[/] Run ID: {run.id} best={best_score:.4f}")
 
 
 # ── store (inspect) ──────────────────────────────────────
