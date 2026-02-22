@@ -28,6 +28,7 @@ def build_annotated_prompt(
         f"Original task: {original_prompt}",
         "",
         f"You are shown {len(parents_sorted)} previous solutions, ranked by score (higher = better, max 1.0).",
+        "All solutions below are provided verbatim as produced by previous models.",
         instruction,
         "",
     ]
@@ -36,9 +37,28 @@ def build_annotated_prompt(
         model = parent.solution.model
         label = f"Solution {i} (score: {score:.2f}, model: {model})"
         if score == best_score:
-            label += " \u2605 BEST"
+            label += " ★ BEST"
         parts.append(f"=== {label} ===")
         parts.append(extract_solution(parent.solution.output))
+
+        # Include error feedback for failing solutions
+        if score < 1.0:
+            error_lines: list[str] = []
+            for ev in parent.evaluations:
+                stderr = ev.details.get("stderr", "")
+                exit_code = ev.details.get("exit_code")
+                if stderr or (exit_code is not None and exit_code != 0):
+                    error_lines.append(f"[{ev.evaluator}] exit_code={exit_code}")
+                    if stderr:
+                        truncated = stderr[:1000]
+                        if len(stderr) > 1000:
+                            truncated += "\n... (truncated)"
+                        error_lines.append(truncated)
+            if error_lines:
+                parts.append("")
+                parts.append("=== ERRORS ===")
+                parts.extend(error_lines)
+
         parts.append("")
 
     parts.append("Provide your improved solution:")
