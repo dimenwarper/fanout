@@ -35,36 +35,46 @@ BUILTIN_SETS: dict[str, ModelSet] = {
         name="diverse",
         models=[
             ModelEntry(model="openai/gpt-4o-mini"),
-            ModelEntry(model="anthropic/claude-3-haiku"),
+            ModelEntry(model="anthropic/claude-haiku-4"),
             ModelEntry(model="meta-llama/llama-3.1-8b-instruct"),
             ModelEntry(model="openai/gpt-4o"),
-            ModelEntry(model="anthropic/claude-sonnet-4-20250514"),
+            ModelEntry(model="anthropic/claude-sonnet-4"),
         ],
     ),
     "small": ModelSet(
         name="small",
         models=[
             ModelEntry(model="openai/gpt-4o-mini"),
-            ModelEntry(model="anthropic/claude-3-haiku"),
+            ModelEntry(model="anthropic/claude-haiku-4"),
             ModelEntry(model="meta-llama/llama-3.1-8b-instruct"),
-            ModelEntry(model="google/gemini-flash-1.5"),
+            ModelEntry(model="google/gemini-2.0-flash"),
         ],
     ),
     "large": ModelSet(
         name="large",
         models=[
             ModelEntry(model="openai/gpt-4o"),
-            ModelEntry(model="anthropic/claude-sonnet-4-20250514"),
-            ModelEntry(model="google/gemini-pro-1.5"),
+            ModelEntry(model="anthropic/claude-sonnet-4"),
+            ModelEntry(model="google/gemini-2.5-pro"),
             ModelEntry(model="meta-llama/llama-3.1-70b-instruct"),
         ],
     ),
     "coding": ModelSet(
         name="coding",
         models=[
-            ModelEntry(model="anthropic/claude-sonnet-4-20250514"),
-            ModelEntry(model="openai/gpt-4o"),
-            ModelEntry(model="deepseek/deepseek-coder"),
+            ModelEntry(model="anthropic/claude-opus-4.6", weight=2.0),
+            ModelEntry(model="openai/gpt-5.2-codex", weight=2.0),
+            ModelEntry(model="deepseek/deepseek-v3.2", weight=1.5),
+            ModelEntry(model="qwen/qwen3-coder", weight=1.0),
+        ],
+    ),
+    "math-proving": ModelSet(
+        name="math-proving",
+        models=[
+            ModelEntry(model="deepseek/deepseek-r1", weight=2.0),
+            ModelEntry(model="openai/o3", weight=2.0),
+            ModelEntry(model="anthropic/claude-opus-4.6", weight=1.5),
+            ModelEntry(model="qwen/qwen3-coder", weight=1.0),
         ],
     ),
 }
