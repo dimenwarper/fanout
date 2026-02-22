@@ -12,35 +12,13 @@ Prints a score (0.0-1.0) on the last line, based on benchmark_ratio.
 from __future__ import annotations
 
 import importlib.util
-import re
 import sys
-import tempfile
 from itertools import combinations
-from pathlib import Path
 
 import numpy as np
 
 
-def strip_code_fences(text: str) -> str:
-    """Strip markdown code fences (```python ... ```) from LLM output."""
-    # Remove opening fence with optional language tag
-    text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
-    # Remove closing fence
-    text = re.sub(r"\n?```$", "", text.strip())
-    return text
-
-
 def load_module(path: str):
-    source = Path(path).read_text()
-    cleaned = strip_code_fences(source)
-
-    if cleaned != source:
-        # Write cleaned version to a temp file so importlib can load it
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
-        tmp.write(cleaned)
-        tmp.close()
-        path = tmp.name
-
     spec = importlib.util.spec_from_file_location("solution", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
