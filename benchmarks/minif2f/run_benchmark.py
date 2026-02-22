@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 from rich.console import Console
+from rich.syntax import Syntax
 from rich.table import Table
 
 from fanout.db.models import Run
@@ -151,9 +152,10 @@ def run_task(
                 stderr = ev.details.get("stderr", "")
                 stdout = ev.details.get("stdout", "")
                 exit_code = ev.details.get("exit_code", "?")
-                output_preview = sol.output[:150].replace("\n", "\\n")
+                preview_lines = sol.output[:500].splitlines()[:15]
+                preview = "\n".join(preview_lines)
                 console.print(f"    [dim]Solution {i+1} [{sol.model}] score={ev.score:.4f} exit={exit_code}[/]")
-                console.print(f"      [dim]output: {output_preview}...[/]")
+                console.print(Syntax(preview, "lean4", theme="monokai", line_numbers=True, padding=(0, 2)))
                 if stderr:
                     console.print(f"      [dim]stderr: {stderr}[/]")
                 if ev.score == 0.0 and stdout:
