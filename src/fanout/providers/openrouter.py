@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import time
 from typing import Any
@@ -12,6 +14,12 @@ from pydantic import BaseModel, Field
 from fanout.db.models import Solution
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+log = logging.getLogger(__name__)
+
+MAX_RETRIES = 5
+RETRY_BASE_DELAY = 1.0  # seconds
+_RETRYABLE = (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError)
 
 
 class SamplingConfig(BaseModel):
@@ -115,25 +123,49 @@ class OpenRouterClient:
             "Content-Type": "application/json",
         }
 
-        start = time.perf_counter()
-        resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
-        latency_ms = (time.perf_counter() - start) * 1000
-        resp.raise_for_status()
-        data = resp.json()
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                start = time.perf_counter()
+                resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+                latency_ms = (time.perf_counter() - start) * 1000
 
-        choice = data["choices"][0]
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
+                # Retry on 429 (rate limit) and 5xx (server errors)
+                if resp.status_code == 429 or resp.status_code >= 500:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning(
+                        "HTTP %d from %s, retrying in %.1fs (attempt %d/%d)",
+                        resp.status_code, model, delay, attempt + 1, MAX_RETRIES,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
 
-        return Solution(
-            run_id=run_id,
-            round_num=round_num,
-            model=model,
-            output=choice["message"]["content"],
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            latency_ms=latency_ms,
-            cost_usd=0.0,  # OpenRouter may provide this in headers
-            parent_solution_id=parent_solution_id,
-        )
+                resp.raise_for_status()
+                data = resp.json()
+
+                choice = data["choices"][0]
+                usage = data.get("usage", {})
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+
+                return Solution(
+                    run_id=run_id,
+                    round_num=round_num,
+                    model=model,
+                    output=choice["message"]["content"],
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    latency_ms=latency_ms,
+                    cost_usd=0.0,
+                    parent_solution_id=parent_solution_id,
+                )
+            except _RETRYABLE as exc:
+                last_exc = exc
+                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                log.warning(
+                    "%s for %s, retrying in %.1fs (attempt %d/%d)",
+                    type(exc).__name__, model, delay, attempt + 1, MAX_RETRIES,
+                )
+                await asyncio.sleep(delay)
+
+        raise last_exc  # type: ignore[misc]
