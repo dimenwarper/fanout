@@ -2,9 +2,15 @@
   <img src="assets/logo.png" alt="fanout logo" width="300">
 </p>
 
+# What is fanout?
+
+Basically:
+
 **A map-reduce primitive for LLM agents.**
 
-Fanout takes a prompt, fans it out across multiple LLM models in parallel (the *map* phase), evaluates and scores every response, then selects the best outputs to seed the next round (the *reduce* phase). Repeat for N rounds and you get evolutionary refinement — the same prompt is re-sampled, but each generation is informed by what worked before.
+This is directly inspired my methods like GEPA and Alphaevolve, but gives more fine-grained control over the sampling, selection, and aggregation components of each to an orchestrating agent, like e.g. Claude Code (see claude/skill), allowing model sets, different materializer strategies for evaluation, among other things. I'm considering adding backends to this as well, so you get large compute when needed.
+
+In a nutshell, fanout takes a prompt, fans it out across multiple LLM models in parallel (the *map* phase), evaluates and scores every response, then selects the best outputs to seed the next round (the *reduce* phase). Repeat for N rounds and you get evolutionary refinement — the same prompt is re-sampled, but each generation is informed by what worked before.
 
 This is useful any time you want to treat LLM outputs as a population rather than a single shot: code generation, prompt engineering, config tuning, creative writing, or any task where quality varies across models and samples.
 
@@ -15,10 +21,10 @@ flowchart TD
     P["Prompt"] --> F["Fan Out"]
 
     subgraph MAP ["Map — sample in parallel"]
-        F --> M1["Model A\n(sample 1)"]
-        F --> M2["Model A\n(sample 2)"]
-        F --> M3["Model B\n(sample 1)"]
-        F --> M4["Model C\n(sample 1)"]
+        F --> M1["Model A (sample 1)"]
+        F --> M2["Model A (sample 2)"]
+        F --> M3["Model B (sample 1)"]
+        F --> M4["Model C (sample 1)"]
     end
 
     M1 --> S["Solutions Pool"]
@@ -27,12 +33,12 @@ flowchart TD
     M4 --> S
 
     subgraph REDUCE ["Reduce — evaluate & select"]
-        S --> E["Evaluators\n(latency, cost, accuracy, script)"]
+        S --> E["Evaluators (latency, cost, accuracy, script)"]
         E --> SC["Scored Solutions"]
-        SC --> SEL["Selection Strategy\n(top-k, weighted, map-elites,\nisland, rsa, alphaevolve)"]
+        SC --> SEL["Selection Strategy (top-k, weighted, map-elites, island, rsa, alphaevolve)"]
     end
 
-    SEL --> |"Round N+1\nselected solutions\nseed next generation"| F
+    SEL --> |"Round N+1 selected solutions seed next generation"| F
 
     SEL --> W["Winner(s)"]
 
