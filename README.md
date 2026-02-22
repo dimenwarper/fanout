@@ -2,8 +2,6 @@
   <img src="assets/logo.png" alt="fanout logo" width="300">
 </p>
 
-# fanout
-
 **A map-reduce primitive for LLM agents.**
 
 Fanout takes a prompt, fans it out across multiple LLM models in parallel (the *map* phase), evaluates and scores every response, then selects the best outputs to seed the next round (the *reduce* phase). Repeat for N rounds and you get evolutionary refinement — the same prompt is re-sampled, but each generation is informed by what worked before.
