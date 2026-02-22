@@ -97,6 +97,9 @@ uv run fanout list-model-sets
 - `--k`: Selection size. Default: `3`
 - `--k-agg`: Number of parent solutions per aggregation prompt (RSA/alphaevolve). Default: `3`
 
+### Execution
+- `--eval-concurrency`: Max parallel evaluations. Default: `1`. Increase on beefy boxes to speed up script evals.
+
 ### Output
 - `-v/--verbose`: Show per-solution details with syntax-highlighted code previews
 

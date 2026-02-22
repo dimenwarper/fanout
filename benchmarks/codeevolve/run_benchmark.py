@@ -111,6 +111,7 @@ def run_task(
     k_agg: int,
     temperature: float,
     max_tokens: int,
+    eval_concurrency: int = 1,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Run a single benchmark task through fanout and return results."""
@@ -164,7 +165,7 @@ def run_task(
             models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
             console.print(f"[dim]sampled \\[{models_str}][/]", end=" ")
 
-            evals = evaluate_solutions(solutions, evaluator_names, store, context)
+            evals = evaluate_solutions(solutions, evaluator_names, store, context, concurrency=eval_concurrency)
             selected = select_solutions(run.id, rnd, strategy, store, k=k)
 
             top_score = selected[0].aggregate_score if selected else 0.0
@@ -228,6 +229,7 @@ def main():
     parser.add_argument("--k-agg", type=int, default=3, help="RSA aggregation size (default: 3)")
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
     args = parser.parse_args()
 
@@ -251,6 +253,7 @@ def main():
                 k_agg=args.k_agg,
                 temperature=args.temperature,
                 max_tokens=args.max_tokens,
+                eval_concurrency=args.eval_concurrency,
                 verbose=args.verbose,
             )
             results.append(result)
