@@ -10,7 +10,7 @@ import random
 from typing import Any
 
 from fanout.db.models import SolutionWithScores
-from fanout.strategies.base import BaseStrategy, register_strategy
+from fanout.strategies.base import BaseStrategy, build_annotated_prompt, register_strategy
 
 
 def _pick_diverse(
@@ -36,6 +36,23 @@ def _pick_diverse(
                 if len(diverse) >= n:
                     break
     return diverse
+
+
+def _biased_sample(
+    selected: list[SolutionWithScores], k: int
+) -> list[SolutionWithScores]:
+    """Score-biased sampling: higher-scoring parents more likely to be picked."""
+    weights = [s.aggregate_score + 0.05 for s in selected]
+    sampled = random.choices(selected, weights=weights, k=k)
+    # Deduplicate while preserving order
+    seen: set[int] = set()
+    unique: list[SolutionWithScores] = []
+    for s in sampled:
+        sid = id(s)
+        if sid not in seen:
+            seen.add(sid)
+            unique.append(s)
+    return unique
 
 
 @register_strategy
@@ -76,7 +93,7 @@ class AlphaEvolveStrategy(BaseStrategy):
         n_samples: int,
         **kwargs: Any,
     ) -> str | list[str]:
-        """Score-annotated aggregation prompts with biased subsampling.
+        """Score-biased subsampling with shared annotated prompt format.
 
         Round 0: return original prompt (independent sampling).
         Round 1+: for each of n_samples, pick K parents via score-biased
@@ -91,54 +108,13 @@ class AlphaEvolveStrategy(BaseStrategy):
         prompts: list[str] = []
         for _ in range(n_samples):
             parents = _biased_sample(selected, k)
-            prompt = _build_annotated_prompt(original_prompt, parents)
+            prompt = build_annotated_prompt(
+                original_prompt, parents,
+                instruction=(
+                    "Study what makes the top-scoring solutions work and what makes lower-scoring ones fail. "
+                    "Produce an improved solution that builds on the strengths and fixes the weaknesses."
+                ),
+            )
             prompts.append(prompt)
 
         return prompts
-
-
-def _biased_sample(
-    selected: list[SolutionWithScores], k: int
-) -> list[SolutionWithScores]:
-    """Score-biased sampling: higher-scoring parents more likely to be picked."""
-    weights = [s.aggregate_score + 0.05 for s in selected]
-    sampled = random.choices(selected, weights=weights, k=k)
-    # Deduplicate while preserving order
-    seen: set[int] = set()
-    unique: list[SolutionWithScores] = []
-    for s in sampled:
-        sid = id(s)
-        if sid not in seen:
-            seen.add(sid)
-            unique.append(s)
-    return unique
-
-
-def _build_annotated_prompt(
-    original_prompt: str,
-    parents: list[SolutionWithScores],
-) -> str:
-    """Build a score-annotated aggregation prompt."""
-    parents_sorted = sorted(parents, key=lambda p: p.aggregate_score, reverse=True)
-    best_score = parents_sorted[0].aggregate_score if parents_sorted else 0.0
-
-    parts = [
-        f"Original task: {original_prompt}",
-        "",
-        f"You are shown {len(parents_sorted)} previous attempts, ranked by score (higher = better, max 1.0).",
-        "Study what makes the top-scoring solutions work and what makes lower-scoring ones fail.",
-        "Produce an improved solution that builds on the strengths and fixes the weaknesses.",
-        "",
-    ]
-    for i, parent in enumerate(parents_sorted, 1):
-        score = parent.aggregate_score
-        model = parent.solution.model
-        label = f"Solution {i} (score: {score:.2f}, model: {model})"
-        if score == best_score:
-            label += " \u2605 BEST"
-        parts.append(f"=== {label} ===")
-        parts.append(parent.solution.output)
-        parts.append("")
-
-    parts.append("Produce ONLY the improved solution code \u2014 no explanations:")
-    return "\n".join(parts)
