@@ -36,27 +36,25 @@ BUILTIN_SETS: dict[str, ModelSet] = {
         models=[
             ModelEntry(model="openai/gpt-4o-mini"),
             ModelEntry(model="anthropic/claude-haiku-4"),
-            ModelEntry(model="meta-llama/llama-3.1-8b-instruct"),
             ModelEntry(model="openai/gpt-4o"),
             ModelEntry(model="anthropic/claude-sonnet-4"),
+            ModelEntry(model="moonshotai/kimi-k2"),
+            ModelEntry(model="zhipu/glm-4-plus"),
         ],
     ),
     "small": ModelSet(
         name="small",
         models=[
-            ModelEntry(model="openai/gpt-4o-mini"),
-            ModelEntry(model="anthropic/claude-haiku-4"),
-            ModelEntry(model="meta-llama/llama-3.1-8b-instruct"),
-            ModelEntry(model="google/gemini-2.0-flash"),
+            ModelEntry(model="google/gemini-2.5-flash"),
+            ModelEntry(model="anthropic/claude-sonnet-4"),
         ],
     ),
     "large": ModelSet(
         name="large",
         models=[
-            ModelEntry(model="openai/gpt-4o"),
-            ModelEntry(model="anthropic/claude-sonnet-4"),
-            ModelEntry(model="google/gemini-2.5-pro"),
-            ModelEntry(model="meta-llama/llama-3.1-70b-instruct"),
+            ModelEntry(model="google/gemini-3"),
+            ModelEntry(model="openai/gpt-5.2-codex"),
+            ModelEntry(model="anthropic/claude-opus-4.6"),
         ],
     ),
     "coding": ModelSet(
