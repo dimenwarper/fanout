@@ -6,3 +6,4 @@ import fanout.strategies.weighted  # noqa: F401
 import fanout.strategies.map_elites  # noqa: F401
 import fanout.strategies.island  # noqa: F401
 import fanout.strategies.rsa  # noqa: F401
+import fanout.strategies.alphaevolve  # noqa: F401

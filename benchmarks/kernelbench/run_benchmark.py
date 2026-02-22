@@ -161,7 +161,7 @@ def run_task(
             from collections import Counter
             model_counts = Counter(s.model for s in solutions)
             models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
-            console.print(f"[dim]sampled [{models_str}][/]", end=" ")
+            console.print(f"[dim]sampled \\[{models_str}][/]", end=" ")
 
             evals = evaluate_solutions(solutions, evaluator_names, store, context)
             selected = select_solutions(run.id, rnd, strategy, store, k=k)
