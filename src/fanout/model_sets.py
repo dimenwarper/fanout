@@ -40,6 +40,9 @@ BUILTIN_SETS: dict[str, ModelSet] = {
             ModelEntry(model="anthropic/claude-sonnet-4"),
             ModelEntry(model="moonshotai/kimi-k2"),
             ModelEntry(model="zhipu/glm-4-plus"),
+            ModelEntry(model="google/gemini-3"),
+            ModelEntry(model="openai/gpt-5.2-codex"),
+            ModelEntry(model="anthropic/claude-opus-4.6"),
         ],
     ),
     "small": ModelSet(
