@@ -143,7 +143,29 @@ class OpenRouterClient:
                 resp.raise_for_status()
                 data = resp.json()
 
-                choice = data["choices"][0]
+                # OpenRouter can return 200 with an error object instead of choices
+                if "error" in data:
+                    err_msg = data["error"].get("message", data["error"])
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning(
+                        "API error from %s: %s, retrying in %.1fs (attempt %d/%d)",
+                        model, err_msg, delay, attempt + 1, MAX_RETRIES,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                # Guard against empty choices or null content
+                choices = data.get("choices") or []
+                content = choices[0]["message"]["content"] if choices else None
+                if not content or not content.strip():
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    log.warning(
+                        "Empty response from %s, retrying in %.1fs (attempt %d/%d)",
+                        model, delay, attempt + 1, MAX_RETRIES,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
                 usage = data.get("usage", {})
                 prompt_tokens = usage.get("prompt_tokens", 0)
                 completion_tokens = usage.get("completion_tokens", 0)
@@ -152,7 +174,7 @@ class OpenRouterClient:
                     run_id=run_id,
                     round_num=round_num,
                     model=model,
-                    output=choice["message"]["content"],
+                    output=content,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     latency_ms=latency_ms,
@@ -168,4 +190,6 @@ class OpenRouterClient:
                 )
                 await asyncio.sleep(delay)
 
-        raise last_exc  # type: ignore[misc]
+        if last_exc:
+            raise last_exc
+        raise RuntimeError(f"Failed to get a valid response from {model} after {MAX_RETRIES} attempts")
