@@ -15,11 +15,19 @@ Requires: elan (Lean 4 version manager), lake
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+def strip_code_fences(text: str) -> str:
+    """Strip markdown code fences (```lean ... ```) from LLM output."""
+    text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
+    text = re.sub(r"\n?```$", "", text.strip())
+    return text
 
 
 def main():
@@ -30,8 +38,8 @@ def main():
 
     solution_path = Path(sys.argv[1])
 
-    # Check for sorry — an incomplete proof scores 0
-    content = solution_path.read_text()
+    # Strip code fences and check for sorry
+    content = strip_code_fences(solution_path.read_text())
     if "sorry" in content:
         print("Proof contains sorry", file=sys.stderr)
         print("0.0")
@@ -53,8 +61,8 @@ def main():
         )
         project_dir = tmpdir / "check"
 
-        # Copy solution as Main.lean
-        shutil.copy2(solution_path, project_dir / "Main.lean")
+        # Write cleaned solution as Main.lean
+        (project_dir / "Main.lean").write_text(content)
 
         # Try to build (typecheck)
         print("Typechecking proof...", file=sys.stderr)

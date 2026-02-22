@@ -16,10 +16,29 @@ Requires: torch with CUDA support, the task file in tasks/
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
+import tempfile
+from pathlib import Path
+
+
+def strip_code_fences(text: str) -> str:
+    """Strip markdown code fences (```python ... ```) from LLM output."""
+    text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
+    text = re.sub(r"\n?```$", "", text.strip())
+    return text
 
 
 def load_module(path: str, name: str):
+    source = Path(path).read_text()
+    cleaned = strip_code_fences(source)
+
+    if cleaned != source:
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
+        tmp.write(cleaned)
+        tmp.close()
+        path = tmp.name
+
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
