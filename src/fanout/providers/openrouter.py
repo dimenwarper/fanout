@@ -32,6 +32,7 @@ class SamplingConfig(BaseModel):
     model_set: str | None = None
     n_samples: int = 5
     solution_format: str = "code"
+    timeout: int = 300
 
 
 class OpenRouterClient:
@@ -71,7 +72,7 @@ class OpenRouterClient:
                     f"expected sample count ({len(drawn_models)})"
                 )
 
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=config.timeout) as client:
                 for i, model in enumerate(drawn_models):
                     parent_id = parents[i % len(parents)] if parents else None
                     p = prompt[i] if per_solution_prompts else prompt
@@ -93,7 +94,7 @@ class OpenRouterClient:
                     f"expected sample count ({len(assigned)})"
                 )
 
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=config.timeout) as client:
                 for idx, model in enumerate(assigned):
                     parent_id = parents[idx % len(parents)] if parents else None
                     p = prompt[idx] if per_solution_prompts else prompt
