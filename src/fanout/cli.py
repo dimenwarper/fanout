@@ -42,8 +42,7 @@ def sample(
     model_set: Annotated[Optional[str], typer.Option("-M", "--model-set", help="Named model set to sample from")] = None,
     temperature: Annotated[float, typer.Option(help="Sampling temperature")] = 0.7,
     max_tokens: Annotated[int, typer.Option(help="Max tokens per response")] = 2048,
-    n_per_model: Annotated[int, typer.Option("-n", help="Samples per model")] = 1,
-    n_samples: Annotated[int, typer.Option("-N", "--n-samples", help="Total samples when using a model set")] = 5,
+    n_samples: Annotated[int, typer.Option("-n", "--n-samples", help="Total samples per round")] = 5,
     run_id: Annotated[Optional[str], typer.Option(help="Existing run ID to add to")] = None,
     round_num: Annotated[int, typer.Option(help="Round number")] = 0,
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
@@ -66,7 +65,7 @@ def sample(
 
     config = SamplingConfig(
         models=models, temperature=temperature,
-        max_tokens=max_tokens, n_per_model=n_per_model,
+        max_tokens=max_tokens,
         model_set=model_set, n_samples=n_samples,
     )
     solutions = do_sample(prompt, config, store, run_id, round_num, api_key=api_key)
@@ -182,8 +181,7 @@ def run_loop(
     evaluator: Annotated[Optional[list[str]], typer.Option("-e", "--evaluator", help="Evaluator (repeatable)")] = None,
     strategy: Annotated[str, typer.Option("-s", "--strategy", help="Selection strategy")] = "top-k",
     rounds: Annotated[int, typer.Option("-r", "--rounds", help="Number of evolutionary rounds")] = 1,
-    n_per_model: Annotated[int, typer.Option("-n", help="Samples per model per round")] = 1,
-    n_samples: Annotated[int, typer.Option("-N", "--n-samples", help="Total samples when using a model set")] = 5,
+    n_samples: Annotated[int, typer.Option("-n", "--n-samples", help="Total samples per round")] = 5,
     k: Annotated[int, typer.Option(help="Selection size")] = 3,
     temperature: Annotated[float, typer.Option(help="Sampling temperature")] = 0.7,
     max_tokens: Annotated[int, typer.Option(help="Max tokens per response")] = 2048,
@@ -218,7 +216,7 @@ def run_loop(
 
     config = SamplingConfig(
         models=models, temperature=temperature,
-        max_tokens=max_tokens, n_per_model=n_per_model,
+        max_tokens=max_tokens,
         model_set=model_set, n_samples=n_samples,
     )
     context: dict[str, Any] | None = {}
@@ -257,12 +255,11 @@ def run_loop(
 
         # Build prompts for next round
         if rnd < rounds - 1:
-            n_expected = config.n_samples if config.model_set else len(config.models) * config.n_per_model
             current_prompt = strategy_instance.build_prompts(
                 original_prompt=prompt,
                 selected=selected,
                 round_num=rnd,
-                n_samples=n_expected,
+                n_samples=config.n_samples,
                 k_agg=k_agg,
             )
 

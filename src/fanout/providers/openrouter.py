@@ -20,7 +20,6 @@ class SamplingConfig(BaseModel):
     models: list[str] = Field(default_factory=lambda: ["openai/gpt-4o-mini"])
     temperature: float = 0.7
     max_tokens: int = 2048
-    n_per_model: int = 1
     model_set: str | None = None
     n_samples: int = 5
 
@@ -71,24 +70,27 @@ class OpenRouterClient:
                     )
                     solutions.append(sol)
         else:
-            total = len(config.models) * config.n_per_model
-            if per_solution_prompts and len(prompt) != total:
+            n = config.n_samples
+            base, extra = divmod(n, len(config.models))
+            assigned = []
+            for i, model in enumerate(config.models):
+                count = base + (1 if i < extra else 0)
+                assigned.extend([model] * count)
+
+            if per_solution_prompts and len(prompt) != len(assigned):
                 raise ValueError(
                     f"Per-solution prompts length ({len(prompt)}) doesn't match "
-                    f"expected sample count ({total})"
+                    f"expected sample count ({len(assigned)})"
                 )
 
             async with httpx.AsyncClient(timeout=120) as client:
-                idx = 0
-                for model in config.models:
-                    for i in range(config.n_per_model):
-                        parent_id = parents[i % len(parents)] if parents else None
-                        p = prompt[idx] if per_solution_prompts else prompt
-                        sol = await self._call_model(
-                            client, p, model, config, run_id, round_num, parent_id,
-                        )
-                        solutions.append(sol)
-                        idx += 1
+                for idx, model in enumerate(assigned):
+                    parent_id = parents[idx % len(parents)] if parents else None
+                    p = prompt[idx] if per_solution_prompts else prompt
+                    sol = await self._call_model(
+                        client, p, model, config, run_id, round_num, parent_id,
+                    )
+                    solutions.append(sol)
 
         return solutions
 

@@ -91,7 +91,6 @@ def run_task(
     n_samples: int = 5,
     strategy: str,
     rounds: int,
-    n_per_model: int,
     k: int,
     k_agg: int,
     temperature: float,
@@ -119,7 +118,6 @@ def run_task(
         models=models,
         temperature=temperature,
         max_tokens=max_tokens,
-        n_per_model=n_per_model,
         model_set=model_set,
         n_samples=n_samples,
     )
@@ -182,12 +180,11 @@ def run_task(
             break
 
         if rnd < rounds - 1:
-            n_expected = config.n_samples if config.model_set else len(config.models) * config.n_per_model
             current_prompt = strategy_instance.build_prompts(
                 original_prompt=prompt,
                 selected=selected,
                 round_num=rnd,
-                n_samples=n_expected,
+                n_samples=config.n_samples,
                 k_agg=k_agg,
             )
 
@@ -216,8 +213,7 @@ def main():
     parser.add_argument("--model", "-m", action="append", help="Model (repeatable)")
     parser.add_argument("--model-set", "-M", help="Named model set (e.g., coding, math-proving)")
     parser.add_argument("--rounds", "-r", type=int, default=5)
-    parser.add_argument("-n", type=int, default=3, help="Samples per model per round")
-    parser.add_argument("-N", "--n-samples", type=int, default=5, help="Total samples when using a model set (default: 5)")
+    parser.add_argument("-n", "--n-samples", type=int, default=5, help="Total samples per round (default: 5)")
     parser.add_argument("-k", type=int, default=3, help="Selection size")
     parser.add_argument("--k-agg", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -241,7 +237,6 @@ def main():
                 n_samples=args.n_samples,
                 strategy=strategy,
                 rounds=args.rounds,
-                n_per_model=args.n,
                 k=args.k,
                 k_agg=args.k_agg,
                 temperature=args.temperature,
