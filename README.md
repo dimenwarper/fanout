@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="fanout logo" width="300">
+</p>
+
 # fanout
 
 **A map-reduce primitive for LLM agents.**
