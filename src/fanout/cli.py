@@ -19,6 +19,7 @@ from fanout.evaluators import list_evaluators
 from fanout.materializers import list_materializers
 from fanout.model_sets import load_model_sets
 from fanout.providers.openrouter import SamplingConfig
+from fanout.solution_format import extract_solution
 from fanout.store import Store
 from fanout.strategies import list_strategies
 
@@ -112,7 +113,8 @@ def sample(
             if evals:
                 score_str = f" score={evals[i].score:.4f}"
             console.print(f"  [dim]Solution {i+1} [{sol.model}]{score_str} latency={sol.latency_ms:.0f}ms[/]")
-            preview_lines = sol.output[:500].splitlines()[:15]
+            extracted = extract_solution(sol.output)
+            preview_lines = extracted[:500].splitlines()[:15]
             preview = "\n".join(preview_lines)
             console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
             if evals:
@@ -127,10 +129,11 @@ def sample(
         table.add_column("Tokens", justify="right")
         table.add_column("Output (preview)")
         for sol in solutions:
+            extracted = extract_solution(sol.output)
             table.add_row(
                 sol.id, sol.model, f"{sol.latency_ms:.0f}",
                 str(sol.prompt_tokens + sol.completion_tokens),
-                sol.output[:80] + ("..." if len(sol.output) > 80 else ""),
+                extracted[:80] + ("..." if len(extracted) > 80 else ""),
             )
         console.print(table)
 
@@ -204,9 +207,10 @@ def select(
     table.add_column("Score", justify="right", style="bold")
     table.add_column("Output (preview)")
     for s in selected:
+        extracted = extract_solution(s.solution.output)
         table.add_row(
             s.solution.id, s.solution.model, f"{s.aggregate_score:.3f}",
-            s.solution.output[:80] + ("..." if len(s.solution.output) > 80 else ""),
+            extracted[:80] + ("..." if len(extracted) > 80 else ""),
         )
     console.print(table)
 
@@ -309,7 +313,8 @@ def run_loop(
                 score_str = f" score={ev.score:.4f}" if ev else ""
                 exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
                 console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
-                preview_lines = sol.output[:500].splitlines()[:15]
+                extracted = extract_solution(sol.output)
+                preview_lines = extracted[:500].splitlines()[:15]
                 preview = "\n".join(preview_lines)
                 console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
                 if ev:
@@ -370,10 +375,11 @@ def store_inspect(
         table.add_column("Score", justify="right", style="bold")
         table.add_column("Output (preview)")
         for s in scored:
+            extracted = extract_solution(s.solution.output)
             table.add_row(
                 s.solution.id, str(s.solution.round_num), s.solution.model,
                 f"{s.aggregate_score:.3f}",
-                s.solution.output[:60] + ("..." if len(s.solution.output) > 60 else ""),
+                extracted[:60] + ("..." if len(extracted) > 60 else ""),
             )
         console.print(table)
 

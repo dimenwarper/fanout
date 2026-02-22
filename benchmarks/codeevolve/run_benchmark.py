@@ -37,6 +37,7 @@ from fanout.providers.openrouter import SamplingConfig
 from fanout.sample import sample as do_sample
 from fanout.select import select_solutions
 from fanout.store import Store
+from fanout.solution_format import extract_solution
 from fanout.strategies.base import get_strategy
 
 console = Console()
@@ -179,7 +180,8 @@ def run_task(
                     stderr = ev.details.get("stderr", "")
                     stdout = ev.details.get("stdout", "")
                     exit_code = ev.details.get("exit_code", "?")
-                    preview_lines = sol.output[:500].splitlines()[:15]
+                    extracted = extract_solution(sol.output)
+                    preview_lines = extracted[:500].splitlines()[:15]
                     preview = "\n".join(preview_lines)
                     console.print(f"    [dim]Solution {i+1} [{sol.model}] score={ev.score:.4f} exit={exit_code}[/]")
                     console.print(Syntax(preview, "python", theme="monokai", line_numbers=True, padding=(0, 2)))
