@@ -170,8 +170,8 @@ Selection strategies determine how solutions survive between rounds. The choice 
 |------|-------------|
 | `top-k` | Select the K highest-scoring solutions. Simple and effective — pure elitism. |
 | `weighted` | Sample with probability proportional to score. Maintains more diversity than top-k by giving lower-scoring solutions a chance to survive. |
-| `rsa` | **Recursive Self-Aggregation.** After round 1, each new solution is generated from a prompt that includes K randomly subsampled parent solutions. The model synthesizes an improvement from those parents rather than starting from scratch. `--k-agg` controls how many parents each prompt includes. |
-| `alphaevolve` | Inspired by [AlphaEvolve](https://arxiv.org/html/2509.26626v1). Combines score-aware tournament selection with diversity preservation, score-annotated aggregation prompts, and score-biased parent subsampling. Designed for tasks where both quality and diversity matter. |
+| `rsa` | **[Recursive Self-Aggregation](https://arxiv.org/html/2509.26626v1).** After round 1, each new solution is generated from a prompt that includes K randomly subsampled parent solutions. The model synthesizes an improvement from those parents rather than starting from scratch. `--k-agg` controls how many parents each prompt includes. |
+| `alphaevolve` | Inspired by [AlphaEvolve](https://arxiv.org/abs/2506.13131). Combines score-aware tournament selection with diversity preservation, score-annotated aggregation prompts, and score-biased parent subsampling. Designed for tasks where both quality and diversity matter. |
 | `map-elites` | Selects the best solution per behavioral dimension cell (e.g., model, output length bucket). Maintains a diverse archive across multiple niches rather than converging on a single solution type. |
 | `island` | Evolves separate subpopulations per model with periodic migration of top solutions between islands. Useful when different models have fundamentally different solution styles and you want to preserve that diversity while still sharing good ideas. |
 
