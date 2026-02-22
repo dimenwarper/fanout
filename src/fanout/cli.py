@@ -61,7 +61,7 @@ def sample(
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
-    eval_concurrency: Annotated[int, typer.Option("--eval-concurrency", help="Max parallel evaluations")] = 1,
+    eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show solution previews with syntax highlighting")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
 ) -> None:
@@ -228,7 +228,7 @@ def run_loop(
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 3,
-    eval_concurrency: Annotated[int, typer.Option("--eval-concurrency", help="Max parallel evaluations")] = 1,
+    eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
 ) -> None:
