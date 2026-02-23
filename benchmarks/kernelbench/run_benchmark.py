@@ -113,6 +113,7 @@ def run_task(
     solution_format: str = "code",
     eval_concurrency: int = 1,
     verbose: bool = False,
+    full: bool = False,
 ) -> dict[str, Any]:
     console.rule(f"[bold cyan]Task: {task_name}[/]")
     console.print(f"  {task_info['description']}")
@@ -172,14 +173,17 @@ def run_task(
             best_score = max(best_score, top_score)
             console.print(f"top={top_score:.4f} best={best_score:.4f}")
 
-            if verbose:
+            if verbose or full:
                 for i, (sol, ev) in enumerate(zip(solutions, evals)):
                     stderr = ev.details.get("stderr", "")
                     stdout = ev.details.get("stdout", "")
                     exit_code = ev.details.get("exit_code", "?")
                     extracted = extract_solution(sol.output)
-                    preview_lines = extracted[:500].splitlines()[:15]
-                    preview = "\n".join(preview_lines)
+                    if full:
+                        preview = extracted
+                    else:
+                        preview_lines = extracted[:500].splitlines()[:15]
+                        preview = "\n".join(preview_lines)
                     console.print(f"    [dim]Solution {i+1} [{sol.model}] score={ev.score:.4f} exit={exit_code}[/]")
                     console.print(Syntax(preview, "python", theme="monokai", line_numbers=True, padding=(0, 2)))
                     if stderr:
@@ -232,6 +236,7 @@ def main():
     parser.add_argument("--solution-format", default="code", help="Solution format: code, diff, raw (default: code)")
     parser.add_argument("-p", "--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
+    parser.add_argument("--full", action="store_true", help="Show full solutions (not truncated)")
     args = parser.parse_args()
 
     models = args.model or ["openai/gpt-4o-mini"]
@@ -257,6 +262,7 @@ def main():
                 solution_format=args.solution_format,
                 eval_concurrency=args.eval_concurrency,
                 verbose=args.verbose,
+                full=args.full,
             )
             results.append(result)
 
