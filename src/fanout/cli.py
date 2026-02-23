@@ -124,10 +124,10 @@ def sample(
             if evals:
                 score_str = f" score={evals[i].score:.4f}"
             console.print(f"  [dim]Solution {i+1} [{sol.model}]{score_str} latency={sol.latency_ms:.0f}ms[/]")
-            extracted = extract_solution(sol.output)
             if full:
-                preview = extracted
+                preview = sol.output
             else:
+                extracted = extract_solution(sol.output)
                 preview_lines = extracted[:500].splitlines()[:15]
                 preview = "\n".join(preview_lines)
             console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
@@ -345,10 +345,10 @@ def run_loop(
                 score_str = f" score={ev.score:.4f}" if ev else ""
                 exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
                 console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
-                extracted = extract_solution(sol.output)
                 if full:
-                    preview = extracted
+                    preview = sol.output
                 else:
+                    extracted = extract_solution(sol.output)
                     preview_lines = extracted[:500].splitlines()[:15]
                     preview = "\n".join(preview_lines)
                 console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
