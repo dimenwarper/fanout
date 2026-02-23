@@ -65,6 +65,7 @@ def sample(
     solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show solution previews with syntax highlighting")] = False,
+    full: Annotated[bool, typer.Option("--full", help="Show full solutions (not truncated)")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
 ) -> None:
     """Fan out a prompt to one or more models."""
@@ -106,7 +107,7 @@ def sample(
         evals = evaluate_solutions(solutions, ["script"], store, context, concurrency=eval_concurrency)
         console.print(f"[bold green]Script evaluator:[/] {len(evals)} evaluations")
 
-    if verbose:
+    if verbose or full:
         lexer = _ext_to_lexer(file_ext)
         for i, sol in enumerate(solutions):
             score_str = ""
@@ -114,8 +115,11 @@ def sample(
                 score_str = f" score={evals[i].score:.4f}"
             console.print(f"  [dim]Solution {i+1} [{sol.model}]{score_str} latency={sol.latency_ms:.0f}ms[/]")
             extracted = extract_solution(sol.output)
-            preview_lines = extracted[:500].splitlines()[:15]
-            preview = "\n".join(preview_lines)
+            if full:
+                preview = extracted
+            else:
+                preview_lines = extracted[:500].splitlines()[:15]
+                preview = "\n".join(preview_lines)
             console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
             if evals:
                 stderr = evals[i].details.get("stderr", "")
@@ -237,6 +241,7 @@ def run_loop(
     solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
+    full: Annotated[bool, typer.Option("--full", help="Show full solutions (not truncated)")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
 ) -> None:
     """Full evolutionary loop: sample → evaluate → select × N rounds."""
@@ -307,15 +312,18 @@ def run_loop(
         for i, s in enumerate(selected[:3], 1):
             console.print(f"  #{i} [{s.solution.model}] score={s.aggregate_score:.3f}")
 
-        if verbose:
+        if verbose or full:
             for i, sol in enumerate(solutions):
                 ev = evals[i] if i < len(evals) else None
                 score_str = f" score={ev.score:.4f}" if ev else ""
                 exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
                 console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
                 extracted = extract_solution(sol.output)
-                preview_lines = extracted[:500].splitlines()[:15]
-                preview = "\n".join(preview_lines)
+                if full:
+                    preview = extracted
+                else:
+                    preview_lines = extracted[:500].splitlines()[:15]
+                    preview = "\n".join(preview_lines)
                 console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
                 if ev:
                     stderr = ev.details.get("stderr", "")
