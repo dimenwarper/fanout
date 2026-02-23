@@ -12,6 +12,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from fanout.db.models import Solution
+from fanout.exceptions import TruncatedOutputError
 from fanout.solution_format import get_format
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -28,7 +29,7 @@ class SamplingConfig(BaseModel):
 
     models: list[str] = Field(default_factory=lambda: ["openai/gpt-4o-mini"])
     temperature: float = 0.7
-    max_tokens: int = 2048
+    max_tokens: int = 16384
     model_set: str | None = None
     n_samples: int = 5
     solution_format: str = "code"
@@ -169,6 +170,12 @@ class OpenRouterClient:
                 # Guard against empty choices or null content
                 choices = data.get("choices") or []
                 content = choices[0]["message"]["content"] if choices else None
+
+                # Check for truncation (finish_reason: "length")
+                finish_reason = choices[0].get("finish_reason") if choices else None
+                if finish_reason == "length" and content:
+                    raise TruncatedOutputError(model, config.max_tokens, content)
+
                 if not content or not content.strip():
                     delay = RETRY_BASE_DELAY * (2 ** attempt)
                     log.warning(
