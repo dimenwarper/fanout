@@ -102,7 +102,7 @@ class AlphaEvolveStrategy(BaseStrategy):
         if round_num == 0 or not selected:
             return original_prompt
 
-        k_agg = kwargs.get("k_agg", 3)
+        k_agg = kwargs.get("k_agg", 6)
         k = min(k_agg, len(selected))
 
         prompts: list[str] = []

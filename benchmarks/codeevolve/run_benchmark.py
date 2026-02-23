@@ -253,7 +253,7 @@ def main():
     parser.add_argument("--rounds", "-r", type=int, default=3, help="Rounds per run (default: 3)")
     parser.add_argument("-n", "--n-samples", type=int, default=5, help="Total samples per round (default: 5)")
     parser.add_argument("-k", type=int, default=3, help="Selection size (default: 3)")
-    parser.add_argument("--k-agg", type=int, default=3, help="RSA aggregation size (default: 3)")
+    parser.add_argument("--k-agg", type=int, default=6, help="RSA aggregation size (default: 6)")
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--solution-format", default="code", help="Solution format: code, diff, raw (default: code)")

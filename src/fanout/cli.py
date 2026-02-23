@@ -250,7 +250,7 @@ def run_loop(
     eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script (implies -e script)")] = None,
     materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
-    k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 3,
+    k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 6,
     solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
