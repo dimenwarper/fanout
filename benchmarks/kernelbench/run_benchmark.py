@@ -252,7 +252,7 @@ def main():
     parser.add_argument("-k", type=int, default=3, help="Selection size")
     parser.add_argument("--k-agg", type=int, default=3)
     parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--solution-format", default="code", help="Solution format: code, diff, raw (default: code)")
     parser.add_argument("-p", "--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
