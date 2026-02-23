@@ -110,7 +110,7 @@ def run_task(
 
     prompt = build_prompt(task_name, task_info)
 
-    if verbose:
+    if verbose and not full:
         console.print(f"\n  [dim]Prompt ({len(prompt)} chars):[/]")
         console.print(f"  [dim]{prompt[:200]}...[/]\n")
 
@@ -142,6 +142,16 @@ def run_task(
 
     for rnd in range(rounds):
         console.print(f"  [dim]Round {rnd + 1}/{rounds}...[/]", end=" ")
+
+        if full:
+            if isinstance(current_prompt, list):
+                for pi, p in enumerate(current_prompt):
+                    console.print(f"\n  [bold]Prompt {pi+1}/{len(current_prompt)} ({len(p)} chars):[/]")
+                    console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
+            else:
+                console.print(f"\n  [bold]Prompt ({len(current_prompt)} chars):[/]")
+                console.print(Syntax(current_prompt, "text", theme="monokai", padding=(0, 2)))
+            console.print()
 
         solutions = do_sample(current_prompt, config, store, run.id, rnd, parent_ids)
 
