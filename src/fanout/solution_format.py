@@ -53,21 +53,30 @@ def strip_code_fences(text: str) -> str:
 class SolutionFormat:
     name: str
     system_prompt: str | None
+    prompt_suffix: str | None
     extract: Callable[[str], str]
 
 
 _CODE_SYSTEM_PROMPT = (
-    "You are a helpful assistant that solves tasks carefully.\n"
-    "You may think step-by-step, but you MUST place your final solution "
-    "inside <solution> and </solution> tags at the end of your response.\n"
+    "You are a helpful assistant that solves tasks carefully. "
+    "You may think step-by-step."
+)
+
+_CODE_PROMPT_SUFFIX = (
+    "You MUST place your final solution inside <solution> and </solution> tags "
+    "at the end of your response.\n"
     "The content inside <solution> tags should be ONLY the deliverable "
     "(code, proof, text, etc.) with no commentary or explanation."
 )
 
 _DIFF_SYSTEM_PROMPT = (
-    "You are a helpful assistant that solves tasks carefully.\n"
-    "You may think step-by-step, but you MUST place your final solution "
-    "inside <solution> and </solution> tags at the end of your response.\n"
+    "You are a helpful assistant that solves tasks carefully. "
+    "You may think step-by-step."
+)
+
+_DIFF_PROMPT_SUFFIX = (
+    "You MUST place your final solution inside <solution> and </solution> tags "
+    "at the end of your response.\n"
     "The content inside <solution> tags should be ONLY a unified diff "
     "(as produced by `diff -u` or `git diff`) with no commentary or explanation."
 )
@@ -76,16 +85,19 @@ _REGISTRY: dict[str, SolutionFormat] = {
     "code": SolutionFormat(
         name="code",
         system_prompt=_CODE_SYSTEM_PROMPT,
+        prompt_suffix=_CODE_PROMPT_SUFFIX,
         extract=extract_solution,
     ),
     "diff": SolutionFormat(
         name="diff",
         system_prompt=_DIFF_SYSTEM_PROMPT,
+        prompt_suffix=_DIFF_PROMPT_SUFFIX,
         extract=extract_diff,
     ),
     "raw": SolutionFormat(
         name="raw",
         system_prompt=None,
+        prompt_suffix=None,
         extract=extract_raw,
     ),
 }

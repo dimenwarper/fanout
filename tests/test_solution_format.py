@@ -123,20 +123,23 @@ class TestFormatRegistry:
         assert isinstance(fmt, SolutionFormat)
         assert fmt.name == "code"
         assert fmt.system_prompt is not None
-        assert "<solution>" in fmt.system_prompt
+        assert fmt.prompt_suffix is not None
+        assert "<solution>" in fmt.prompt_suffix
         assert fmt.extract is extract_solution
 
     def test_get_diff_format(self):
         fmt = get_format("diff")
         assert fmt.name == "diff"
         assert fmt.system_prompt is not None
-        assert "diff" in fmt.system_prompt.lower()
+        assert fmt.prompt_suffix is not None
+        assert "diff" in fmt.prompt_suffix.lower()
         assert fmt.extract is extract_diff
 
     def test_get_raw_format(self):
         fmt = get_format("raw")
         assert fmt.name == "raw"
         assert fmt.system_prompt is None
+        assert fmt.prompt_suffix is None
         assert fmt.extract is extract_raw
 
     def test_unknown_format_raises(self):

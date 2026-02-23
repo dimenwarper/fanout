@@ -119,7 +119,10 @@ class OpenRouterClient:
         fmt = get_format(config.solution_format)
         if fmt.system_prompt:
             messages.append({"role": "system", "content": fmt.system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        user_content = prompt
+        if fmt.prompt_suffix:
+            user_content = f"{prompt}\n\n{fmt.prompt_suffix}"
+        messages.append({"role": "user", "content": user_content})
 
         payload: dict[str, Any] = {
             "model": model,
