@@ -140,6 +140,13 @@ def run_task(
     round_scores: list[float] = []
     solved = False
 
+    if full:
+        from fanout.solution_format import get_format as _get_format
+        _fmt = _get_format(solution_format)
+        if _fmt.system_prompt:
+            console.print(f"\n  [bold]System prompt ({len(_fmt.system_prompt)} chars):[/]")
+            console.print(Syntax(_fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
+
     for rnd in range(rounds):
         console.print(f"  [dim]Round {rnd + 1}/{rounds}...[/]", end=" ")
 

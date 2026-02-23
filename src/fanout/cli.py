@@ -90,6 +90,11 @@ def sample(
         solution_format=solution_format,
     )
     if full:
+        from fanout.solution_format import get_format
+        fmt = get_format(solution_format)
+        if fmt.system_prompt:
+            console.print(f"\n[bold]System prompt ({len(fmt.system_prompt)} chars):[/]")
+            console.print(Syntax(fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
         console.print(f"\n[bold]Prompt ({len(prompt)} chars):[/]")
         console.print(Syntax(prompt, "text", theme="monokai", padding=(0, 2)))
         console.print()
@@ -292,6 +297,13 @@ def run_loop(
     current_prompt: str | list[str] = prompt
     best_score = 0.0
     lexer = _ext_to_lexer(file_ext)
+
+    if full:
+        from fanout.solution_format import get_format as _get_format
+        _fmt = _get_format(solution_format)
+        if _fmt.system_prompt:
+            console.print(f"\n[bold]System prompt ({len(_fmt.system_prompt)} chars):[/]")
+            console.print(Syntax(_fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
 
     for rnd in range(rounds):
         console.rule(f"[bold]Round {rnd + 1}/{rounds}[/]")
