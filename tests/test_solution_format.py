@@ -125,6 +125,7 @@ class TestFormatRegistry:
         assert fmt.system_prompt is not None
         assert fmt.prompt_suffix is not None
         assert "<solution>" in fmt.prompt_suffix
+        assert "<thinking>" in fmt.prompt_suffix
         assert fmt.extract is extract_solution
 
     def test_get_diff_format(self):

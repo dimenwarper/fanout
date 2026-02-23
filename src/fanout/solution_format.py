@@ -57,26 +57,20 @@ class SolutionFormat:
     extract: Callable[[str], str]
 
 
-_CODE_SYSTEM_PROMPT = (
-    "You are a helpful assistant that solves tasks carefully. "
-    "You may think step-by-step."
-)
+_SYSTEM_PROMPT = "You are a helpful assistant that solves tasks carefully."
 
 _CODE_PROMPT_SUFFIX = (
-    "You MUST place your final solution inside <solution> and </solution> tags "
-    "at the end of your response.\n"
+    "Structure your response as follows:\n"
+    "1. Put your reasoning inside <thinking> and </thinking> tags.\n"
+    "2. Then put your final solution inside <solution> and </solution> tags.\n\n"
     "The content inside <solution> tags should be ONLY the deliverable "
     "(code, proof, text, etc.) with no commentary or explanation."
 )
 
-_DIFF_SYSTEM_PROMPT = (
-    "You are a helpful assistant that solves tasks carefully. "
-    "You may think step-by-step."
-)
-
 _DIFF_PROMPT_SUFFIX = (
-    "You MUST place your final solution inside <solution> and </solution> tags "
-    "at the end of your response.\n"
+    "Structure your response as follows:\n"
+    "1. Put your reasoning inside <thinking> and </thinking> tags.\n"
+    "2. Then put your final solution inside <solution> and </solution> tags.\n\n"
     "The content inside <solution> tags should be ONLY a unified diff "
     "(as produced by `diff -u` or `git diff`) with no commentary or explanation."
 )
@@ -84,13 +78,13 @@ _DIFF_PROMPT_SUFFIX = (
 _REGISTRY: dict[str, SolutionFormat] = {
     "code": SolutionFormat(
         name="code",
-        system_prompt=_CODE_SYSTEM_PROMPT,
+        system_prompt=_SYSTEM_PROMPT,
         prompt_suffix=_CODE_PROMPT_SUFFIX,
         extract=extract_solution,
     ),
     "diff": SolutionFormat(
         name="diff",
-        system_prompt=_DIFF_SYSTEM_PROMPT,
+        system_prompt=_SYSTEM_PROMPT,
         prompt_suffix=_DIFF_PROMPT_SUFFIX,
         extract=extract_diff,
     ),
