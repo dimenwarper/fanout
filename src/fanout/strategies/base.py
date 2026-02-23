@@ -39,6 +39,9 @@ def build_annotated_prompt(
         if score == best_score:
             label += " ★ BEST"
         parts.append(f"=== {label} ===")
+        if parent.solution.metadata.get("truncated"):
+            max_tok = parent.solution.metadata.get("max_tokens", "?")
+            parts.append(f"[WARNING: This solution was truncated at {max_tok} max_tokens. The output below is incomplete.]")
         parts.append(extract_solution(parent.solution.output))
 
         # Include error feedback for failing solutions

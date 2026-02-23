@@ -12,7 +12,6 @@ import httpx
 from pydantic import BaseModel, Field
 
 from fanout.db.models import Solution
-from fanout.exceptions import TruncatedOutputError
 from fanout.solution_format import get_format
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -173,8 +172,12 @@ class OpenRouterClient:
 
                 # Check for truncation (finish_reason: "length")
                 finish_reason = choices[0].get("finish_reason") if choices else None
-                if finish_reason == "length" and content:
-                    raise TruncatedOutputError(model, config.max_tokens, content)
+                truncated = finish_reason == "length"
+                if truncated and content:
+                    log.warning(
+                        "Response from %s was truncated at %d max_tokens",
+                        model, config.max_tokens,
+                    )
 
                 if not content or not content.strip():
                     delay = RETRY_BASE_DELAY * (2 ** attempt)
@@ -189,6 +192,11 @@ class OpenRouterClient:
                 prompt_tokens = usage.get("prompt_tokens", 0)
                 completion_tokens = usage.get("completion_tokens", 0)
 
+                metadata: dict[str, Any] = {}
+                if truncated:
+                    metadata["truncated"] = True
+                    metadata["max_tokens"] = config.max_tokens
+
                 return Solution(
                     run_id=run_id,
                     round_num=round_num,
@@ -199,6 +207,7 @@ class OpenRouterClient:
                     latency_ms=latency_ms,
                     cost_usd=0.0,
                     parent_solution_id=parent_solution_id,
+                    metadata=metadata,
                 )
             except _RETRYABLE as exc:
                 last_exc = exc
