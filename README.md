@@ -55,6 +55,20 @@ flowchart TD
 
 ## Install
 
+### Prerequisites
+
+Fanout uses **Redis** for persistent storage. Install the Redis server:
+
+```bash
+# macOS
+brew install redis
+
+# Ubuntu / Debian
+sudo apt install redis-server
+```
+
+When you run fanout, it will automatically connect to Redis on `localhost:6379`, starting the server if it finds `redis-server` on your PATH. If Redis is unavailable, it falls back to an ephemeral in-memory store (data is lost when the process exits).
+
 ### Local development
 
 ```bash
@@ -306,7 +320,7 @@ src/fanout/
 ├── sample.py              # Sampling orchestration
 ├── evaluate.py            # Evaluation orchestration (supports parallel via -p)
 ├── select.py              # Selection orchestration
-├── store.py               # SQLite persistence
+├── store.py               # Storage facade (Redis → in-memory fallback)
 ├── model_sets.py           # Weighted model set definitions
 ├── db/
 │   └── models.py          # Pydantic data models (Run, Solution, Evaluation)
@@ -333,4 +347,4 @@ src/fanout/
     └── island.py          # Island model with migration
 ```
 
-Data is stored in `.fanout/fanout.db` (SQLite, WAL mode) in the project directory.
+Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs).

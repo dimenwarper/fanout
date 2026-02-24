@@ -3,8 +3,42 @@
 from __future__ import annotations
 
 from fanout.channel import Channel
-from fanout.channels.memory import MemoryChannel
 from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
+
+
+def _default_channel() -> Channel:
+    """Return a RedisChannel, starting Redis if needed, or fall back to MemoryChannel."""
+    import shutil
+    import subprocess
+
+    from fanout.channels.redis import RedisChannel
+
+    try:
+        ch = RedisChannel()
+        ch.r.ping()
+        return ch
+    except Exception:
+        pass
+
+    # Try to start Redis
+    redis_bin = shutil.which("redis-server")
+    if redis_bin:
+        try:
+            subprocess.Popen(
+                [redis_bin, "--daemonize", "yes"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            import time
+            time.sleep(0.5)
+            ch = RedisChannel()
+            ch.r.ping()
+            return ch
+        except Exception:
+            pass
+
+    from fanout.channels.memory import MemoryChannel
+    return MemoryChannel()
 
 
 class Store:
@@ -12,7 +46,7 @@ class Store:
 
     def __init__(self, channel: Channel | None = None):
         if channel is None:
-            channel = MemoryChannel()
+            channel = _default_channel()
         self.ch = channel
 
     # ── Runs ──────────────────────────────────────────────

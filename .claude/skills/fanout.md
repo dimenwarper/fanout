@@ -106,7 +106,8 @@ uv run fanout list-model-sets
 ## Environment
 
 - `OPENROUTER_API_KEY`: Required. Your OpenRouter API key.
+- **Redis**: Install `redis-server` (`brew install redis` on macOS, `apt install redis-server` on Linux). Fanout auto-starts it if found on PATH. Falls back to in-memory storage if unavailable.
 
 ## Data
 
-Results are stored in `.fanout/fanout.db` (SQLite) in the current project directory.
+Results are stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an ephemeral in-memory store is used.

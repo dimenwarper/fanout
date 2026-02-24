@@ -10,16 +10,18 @@ Set up the `.env` file with the required API keys and provider configuration for
 
 ## Steps
 
-1. Check if `.env` already exists in the project root. If it does, read it and show the user what's currently configured (mask key values, e.g. `sk-or-...****`).
+1. Check if **Redis** is installed (`which redis-server`). If not, offer to install it (`brew install redis` on macOS, `sudo apt install redis-server` on Linux). Verify it's running with `redis-cli ping`.
 
-2. Ask the user for their **OpenRouter API key** if `OPENROUTER_API_KEY` is not already set. They can get one at https://openrouter.ai/keys
+2. Check if `.env` already exists in the project root. If it does, read it and show the user what's currently configured (mask key values, e.g. `sk-or-...****`).
 
-3. Write/update the `.env` file with the key:
+3. Ask the user for their **OpenRouter API key** if `OPENROUTER_API_KEY` is not already set. They can get one at https://openrouter.ai/keys
+
+4. Write/update the `.env` file with the key:
    ```
    OPENROUTER_API_KEY=<their key>
    ```
 
-4. Verify the key works by running:
+5. Verify the key works by running:
    ```bash
    uv run python -c "
    import httpx, os
@@ -32,9 +34,9 @@ Set up the `.env` file with the required API keys and provider configuration for
    "
    ```
 
-5. Confirm `.env` is in `.gitignore` (it should be). Warn the user if it isn't.
+6. Confirm `.env` is in `.gitignore` (it should be). Warn the user if it isn't.
 
-6. Print a summary of what was configured and suggest a quick test:
+7. Print a summary of what was configured and suggest a quick test:
    ```bash
    uv run fanout sample "Say hello" -m openai/gpt-4o-mini -n 1
    ```
