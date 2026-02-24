@@ -14,6 +14,8 @@ from fanout.providers.openrouter import SamplingConfig
 from fanout.store import Store
 from fanout.strategies.base import get_strategy
 from fanout.workflow import (
+    LaunchWorkflow,
+    SampleWorkflow,
     Workflow,
     WorkflowContext,
     WorkflowResult,
@@ -170,32 +172,10 @@ class TestEvolveStep:
         assert ctx.current_prompt == "test prompt"
 
 
-# ── Custom step / early stop ─────────────────────────────
+# ── SampleWorkflow ───────────────────────────────────────
 
 
-class TestCustomStep:
-    @patch("fanout.workflow.do_sample")
-    def test_stop_flag_breaks_loop(self, mock_sample):
-        mock_sample.return_value = []
-
-        call_count = 0
-
-        def counting_step(ctx):
-            nonlocal call_count
-            call_count += 1
-            ctx.stop = True
-
-        wf = Workflow(steps=[counting_step])
-        result = wf.run(prompt="p", rounds=5, store=_make_store())
-
-        assert call_count == 1
-        assert result.round_scores == []
-
-
-# ── Full workflow ────────────────────────────────────────
-
-
-class TestWorkflow:
+class TestSampleWorkflow:
     @patch("fanout.workflow.do_sample")
     @patch("fanout.workflow.evaluate_solutions")
     def test_full_workflow_with_mocked_primitives(self, mock_eval, mock_sample):
@@ -217,7 +197,7 @@ class TestWorkflow:
         mock_sample.side_effect = fake_sample
         mock_eval.side_effect = fake_eval
 
-        wf = Workflow(steps=[sample_step, evaluate_step, select_step, evolve_step])
+        wf = SampleWorkflow()
         result = wf.run(
             prompt="solve this",
             models=["test-model"],
@@ -237,7 +217,7 @@ class TestWorkflow:
 
     @patch("fanout.workflow.do_sample")
     @patch("fanout.workflow.evaluate_solutions")
-    def test_early_stop_custom_step(self, mock_eval, mock_sample):
+    def test_early_stop_via_extra_steps(self, mock_eval, mock_sample):
         store = _make_store()
 
         def fake_sample(prompt, config, store, run_id, round_num, parent_ids, api_key=None):
@@ -262,9 +242,7 @@ class TestWorkflow:
             if ctx.best_score >= 1.0:
                 ctx.stop = True
 
-        wf = Workflow(steps=[
-            sample_step, evaluate_step, select_step, stop_if_solved, evolve_step,
-        ])
+        wf = SampleWorkflow(extra_steps=[stop_if_solved])
         result = wf.run(
             prompt="prove this",
             models=["test-model"],
@@ -304,7 +282,7 @@ class TestWorkflow:
         buf = StringIO()
         test_console = Console(file=buf, force_terminal=False)
 
-        wf = Workflow(steps=[sample_step, evaluate_step, select_step, evolve_step])
+        wf = SampleWorkflow()
         result = wf.run(
             prompt="solve this",
             models=["test-model"],
@@ -325,14 +303,17 @@ class TestWorkflow:
         assert result.best_score > 0
 
 
-class TestLaunchStep:
+# ── LaunchWorkflow ───────────────────────────────────────
+
+
+class TestLaunchWorkflow:
     @patch("fanout.workflow.do_launch")
-    def test_sets_solutions(self, mock_launch):
+    def test_launch_step_sets_solutions(self, mock_launch):
         ctx = _make_ctx()
         fake_solutions = [Solution(run_id=ctx.run.id, model="m", output="x")]
         mock_launch.return_value = fake_solutions
 
-        launch_step(ctx)
+        launch_step(ctx, n_agents=3, max_steps=10)
 
         assert ctx.solutions is fake_solutions
         mock_launch.assert_called_once_with(
@@ -340,8 +321,8 @@ class TestLaunchStep:
             models=ctx.config.models,
             store=ctx.store,
             run_id=ctx.run.id,
-            n_agents=ctx.n_agents,
-            max_steps=ctx.max_steps,
+            n_agents=3,
+            max_steps=10,
             eval_script=ctx.eval_context.get("eval_script"),
             materializer=ctx.eval_context.get("materializer", "file"),
             file_ext=ctx.eval_context.get("file_extension", ".py"),
@@ -350,7 +331,7 @@ class TestLaunchStep:
         )
 
     @patch("fanout.workflow.do_launch")
-    def test_agent_workflow_runs_one_round(self, mock_launch):
+    def test_launch_workflow_runs(self, mock_launch):
         store = _make_store()
 
         def fake_launch(**kwargs):
@@ -362,11 +343,10 @@ class TestLaunchStep:
 
         mock_launch.side_effect = fake_launch
 
-        wf = Workflow(steps=[launch_step, select_step])
+        wf = LaunchWorkflow()
         result = wf.run(
             prompt="solve this",
             models=["test-model"],
-            rounds=1,
             strategy="top-k",
             k=1,
             store=store,

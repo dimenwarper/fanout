@@ -26,10 +26,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from rich.console import Console
 from rich.table import Table
 
-from fanout.workflow import (
-    Workflow, WorkflowContext,
-    sample_step, evaluate_step, select_step, evolve_step, launch_step,
-)
+from fanout.workflow import SampleWorkflow, LaunchWorkflow, WorkflowContext
 
 console = Console()
 
@@ -117,35 +114,48 @@ def run_task(
     prompt = build_prompt(task_name, task_info)
 
     if mode == "agent":
-        wf = Workflow(steps=[launch_step, select_step])
-        effective_rounds = 1
+        wf = LaunchWorkflow()
+        result = wf.run(
+            prompt=prompt,
+            models=models,
+            model_set=model_set,
+            n_samples=n_samples,
+            n_agents=n_agents,
+            max_steps=max_steps,
+            strategy=strategy,
+            k=k,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            solution_format=solution_format,
+            eval_script=EVAL_SCRIPT,
+            eval_context={"file_extension": ".lean"},
+            verbose=verbose,
+            full=full,
+            console=console,
+            syntax_lang="lean4",
+        )
     else:
-        wf = Workflow(steps=[
-            sample_step, evaluate_step, select_step, stop_if_solved, evolve_step,
-        ])
-        effective_rounds = rounds
-    result = wf.run(
-        prompt=prompt,
-        models=models,
-        model_set=model_set,
-        n_samples=n_samples,
-        rounds=effective_rounds,
-        strategy=strategy,
-        k=k,
-        k_agg=k_agg,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        solution_format=solution_format,
-        eval_script=EVAL_SCRIPT,
-        eval_context={"file_extension": ".lean"},
-        eval_concurrency=eval_concurrency,
-        verbose=verbose,
-        full=full,
-        console=console,
-        syntax_lang="lean4",
-        n_agents=n_agents,
-        max_steps=max_steps,
-    )
+        wf = SampleWorkflow(extra_steps=[stop_if_solved])
+        result = wf.run(
+            prompt=prompt,
+            models=models,
+            model_set=model_set,
+            n_samples=n_samples,
+            rounds=rounds,
+            strategy=strategy,
+            k=k,
+            k_agg=k_agg,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            solution_format=solution_format,
+            eval_script=EVAL_SCRIPT,
+            eval_context={"file_extension": ".lean"},
+            eval_concurrency=eval_concurrency,
+            verbose=verbose,
+            full=full,
+            console=console,
+            syntax_lang="lean4",
+        )
 
     solved = result.best_score >= 1.0
 

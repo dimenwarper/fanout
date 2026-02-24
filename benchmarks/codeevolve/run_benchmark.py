@@ -30,7 +30,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from rich.console import Console
 from rich.table import Table
 
-from fanout.workflow import Workflow, sample_step, evaluate_step, select_step, evolve_step, launch_step
+from fanout.workflow import SampleWorkflow, LaunchWorkflow
 
 console = Console()
 
@@ -126,32 +126,46 @@ def run_task(
 
     try:
         if mode == "agent":
-            wf = Workflow(steps=[launch_step, select_step])
-            effective_rounds = 1
+            wf = LaunchWorkflow()
+            result = wf.run(
+                prompt=prompt,
+                models=models,
+                model_set=model_set,
+                n_samples=n_samples,
+                n_agents=n_agents,
+                max_steps=max_steps,
+                strategy=strategy,
+                k=k,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                solution_format=solution_format,
+                eval_script=str(eval_wrapper),
+                eval_context={"file_extension": ".py"},
+                verbose=verbose,
+                full=full,
+                console=console,
+            )
         else:
-            wf = Workflow(steps=[sample_step, evaluate_step, select_step, evolve_step])
-            effective_rounds = rounds
-        result = wf.run(
-            prompt=prompt,
-            models=models,
-            model_set=model_set,
-            n_samples=n_samples,
-            rounds=effective_rounds,
-            strategy=strategy,
-            k=k,
-            k_agg=k_agg,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            solution_format=solution_format,
-            eval_script=str(eval_wrapper),
-            eval_context={"file_extension": ".py"},
-            eval_concurrency=eval_concurrency,
-            verbose=verbose,
-            full=full,
-            console=console,
-            n_agents=n_agents,
-            max_steps=max_steps,
-        )
+            wf = SampleWorkflow()
+            result = wf.run(
+                prompt=prompt,
+                models=models,
+                model_set=model_set,
+                n_samples=n_samples,
+                rounds=rounds,
+                strategy=strategy,
+                k=k,
+                k_agg=k_agg,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                solution_format=solution_format,
+                eval_script=str(eval_wrapper),
+                eval_context={"file_extension": ".py"},
+                eval_concurrency=eval_concurrency,
+                verbose=verbose,
+                full=full,
+                console=console,
+            )
 
         return {
             "task": task_name,

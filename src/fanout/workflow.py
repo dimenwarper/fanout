@@ -1,18 +1,23 @@
 """Composable workflow pipelines from fanout primitives.
 
-A Workflow runs a list of step functions in a loop for N rounds.
-Each step is ``(ctx: WorkflowContext) -> None`` and reads/writes shared context.
-Built-in steps wrap the existing sample / evaluate / select primitives.
+Two workflow classes wrap the core sample/evaluate/select/evolve primitives:
+
+- ``SampleWorkflow`` — multi-round evolutionary loop (sample → eval → select → evolve).
+- ``LaunchWorkflow`` — single-shot agent-based workflow (launch → select).
+
+Both inherit from ``Workflow`` which provides shared setup logic.
 
 Usage::
 
-    from fanout.workflow import Workflow, sample_step, evaluate_step, select_step, evolve_step
+    from fanout.workflow import SampleWorkflow, LaunchWorkflow
 
-    wf = Workflow(steps=[sample_step, evaluate_step, select_step, evolve_step])
-    result = wf.run(
-        prompt=prompt, models=models, rounds=3,
-        eval_script=str(eval_wrapper), strategy="top-k", k=3,
-    )
+    # Sample mode
+    wf = SampleWorkflow()
+    result = wf.run(prompt=prompt, rounds=3, strategy="top-k", k=3, ...)
+
+    # Agent mode
+    wf = LaunchWorkflow()
+    result = wf.run(prompt=prompt, n_agents=3, max_steps=10, ...)
 """
 
 from __future__ import annotations
@@ -53,8 +58,6 @@ class WorkflowContext:
     eval_concurrency: int
     rounds: int
     api_key: str | None = None
-    n_agents: int = 3
-    max_steps: int = 10
 
     # ── Logging ──────────────────────────────────────────
     console: Console | None = None
@@ -172,15 +175,15 @@ def evolve_step(ctx: WorkflowContext) -> None:
         )
 
 
-def launch_step(ctx: WorkflowContext) -> None:
+def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10) -> None:
     """Launch concurrent agents that iteratively produce and improve solutions."""
     ctx.solutions = do_launch(
         prompt=ctx.prompt,
         models=ctx.config.models,
         store=ctx.store,
         run_id=ctx.run.id,
-        n_agents=ctx.n_agents,
-        max_steps=ctx.max_steps,
+        n_agents=n_agents,
+        max_steps=max_steps,
         eval_script=ctx.eval_context.get("eval_script"),
         materializer=ctx.eval_context.get("materializer", "file"),
         file_ext=ctx.eval_context.get("file_extension", ".py"),
@@ -188,29 +191,22 @@ def launch_step(ctx: WorkflowContext) -> None:
         api_key=ctx.api_key,
     )
     if ctx.console:
-        ctx.console.print(f"[dim]launched {ctx.n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
+        ctx.console.print(f"[dim]launched {n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
 
 
-# ── Workflow ─────────────────────────────────────────────
+# ── Workflow base class ──────────────────────────────────
 
 
 class Workflow:
-    """A composable pipeline that loops step functions over rounds."""
+    """Base class for workflow pipelines. Subclasses override ``_execute``."""
 
-    def __init__(self, steps: list[StepFn]) -> None:
-        self.steps = steps
-
-    def run(
+    def _build_context(
         self,
         prompt: str,
         *,
         models: list[str] | None = None,
         model_set: str | None = None,
         n_samples: int = 5,
-        rounds: int = 3,
-        strategy: str = "top-k",
-        k: int = 3,
-        k_agg: int = 6,
         temperature: float = 0.7,
         max_tokens: int = 16384,
         solution_format: str = "code",
@@ -224,10 +220,12 @@ class Workflow:
         full: bool = False,
         console: Console | None = None,
         syntax_lang: str = "python",
-        n_agents: int = 3,
-        max_steps: int = 10,
-    ) -> WorkflowResult:
-        """Execute the workflow loop and return results."""
+        strategy: str = "top-k",
+        k: int = 3,
+        k_agg: int = 6,
+        rounds: int = 1,
+    ) -> WorkflowContext:
+        """Build shared context — called by subclass ``run()`` methods."""
         if store is None:
             store = Store()
 
@@ -255,7 +253,7 @@ class Workflow:
         if (verbose or full) and console is None:
             console = Console()
 
-        ctx = WorkflowContext(
+        return WorkflowContext(
             prompt=prompt,
             store=store,
             run=run,
@@ -274,50 +272,176 @@ class Workflow:
             verbose=verbose,
             full=full,
             syntax_lang=syntax_lang,
-            n_agents=n_agents,
-            max_steps=max_steps,
         )
 
-        # Pre-loop: show prompt preview (verbose) or full system prompt + suffix (full)
-        if console and verbose and not full:
-            console.print(f"\n  [dim]Prompt ({len(prompt)} chars):[/]")
-            console.print(f"  [dim]{prompt[:200]}...[/]\n")
+    def _log_prompt_preview(self, ctx: WorkflowContext, solution_format: str = "code") -> None:
+        """Log prompt preview if verbose/full mode is enabled."""
+        if ctx.console and ctx.verbose and not ctx.full:
+            ctx.console.print(f"\n  [dim]Prompt ({len(ctx.prompt)} chars):[/]")
+            ctx.console.print(f"  [dim]{ctx.prompt[:200]}...[/]\n")
 
-        if full and console:
+        if ctx.full and ctx.console:
             fmt = get_format(solution_format)
             if fmt.system_prompt:
-                console.print(f"\n  [bold]System prompt:[/]")
-                console.print(Syntax(fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
+                ctx.console.print(f"\n  [bold]System prompt:[/]")
+                ctx.console.print(Syntax(fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
             if fmt.prompt_suffix:
-                console.print(f"\n  [bold]Prompt suffix (appended to all user prompts):[/]")
-                console.print(Syntax(fmt.prompt_suffix, "text", theme="monokai", padding=(0, 2)))
+                ctx.console.print(f"\n  [bold]Prompt suffix (appended to all user prompts):[/]")
+                ctx.console.print(Syntax(fmt.prompt_suffix, "text", theme="monokai", padding=(0, 2)))
 
-        for rnd in range(rounds):
+    def _execute(self, ctx: WorkflowContext) -> None:
+        """Override in subclasses to implement the workflow loop."""
+        raise NotImplementedError
+
+    def run(self, prompt: str, **kwargs: Any) -> WorkflowResult:
+        """Execute the workflow and return results."""
+        ctx = self._build_context(prompt, **kwargs)
+        self._log_prompt_preview(ctx, kwargs.get("solution_format", "code"))
+        self._execute(ctx)
+        return WorkflowResult(
+            run_id=ctx.run.id,
+            best_score=ctx.best_score,
+            round_scores=ctx.round_scores,
+        )
+
+
+# ── SampleWorkflow ───────────────────────────────────────
+
+
+class SampleWorkflow(Workflow):
+    """Multi-round evolutionary workflow: sample → eval → select → [extra] → evolve."""
+
+    def __init__(self, *, extra_steps: list[StepFn] | None = None) -> None:
+        self.extra_steps = extra_steps or []
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        models: list[str] | None = None,
+        model_set: str | None = None,
+        n_samples: int = 5,
+        rounds: int = 3,
+        strategy: str = "top-k",
+        k: int = 3,
+        k_agg: int = 6,
+        temperature: float = 0.7,
+        max_tokens: int = 16384,
+        solution_format: str = "code",
+        eval_script: str | None = None,
+        eval_context: dict[str, Any] | None = None,
+        evaluator_names: list[str] | None = None,
+        eval_concurrency: int = 1,
+        api_key: str | None = None,
+        store: Store | None = None,
+        verbose: bool = False,
+        full: bool = False,
+        console: Console | None = None,
+        syntax_lang: str = "python",
+    ) -> WorkflowResult:
+        """Execute the sample workflow loop and return results."""
+        ctx = self._build_context(
+            prompt,
+            models=models, model_set=model_set, n_samples=n_samples,
+            temperature=temperature, max_tokens=max_tokens,
+            solution_format=solution_format, eval_script=eval_script,
+            eval_context=eval_context, evaluator_names=evaluator_names,
+            eval_concurrency=eval_concurrency, api_key=api_key,
+            store=store, verbose=verbose, full=full, console=console,
+            syntax_lang=syntax_lang, strategy=strategy, k=k, k_agg=k_agg,
+            rounds=rounds,
+        )
+        self._log_prompt_preview(ctx, solution_format)
+        self._execute(ctx)
+        return WorkflowResult(
+            run_id=ctx.run.id,
+            best_score=ctx.best_score,
+            round_scores=ctx.round_scores,
+        )
+
+    def _execute(self, ctx: WorkflowContext) -> None:
+        steps: list[StepFn] = [
+            sample_step, evaluate_step, select_step,
+            *self.extra_steps,
+            evolve_step,
+        ]
+
+        for rnd in range(ctx.rounds):
             ctx.round_num = rnd
 
-            if console:
-                console.print(f"  [dim]Round {rnd + 1}/{rounds}...[/]", end=" ")
+            if ctx.console:
+                ctx.console.print(f"  [dim]Round {rnd + 1}/{ctx.rounds}...[/]", end=" ")
 
             # Pre-sample: show current prompt(s)
-            if full and console:
+            if ctx.full and ctx.console:
                 if isinstance(ctx.current_prompt, list):
                     for i, p in enumerate(ctx.current_prompt):
-                        console.print(f"\n  [bold]Prompt {i + 1}/{len(ctx.current_prompt)} ({len(p)} chars):[/]")
-                        console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
+                        ctx.console.print(f"\n  [bold]Prompt {i + 1}/{len(ctx.current_prompt)} ({len(p)} chars):[/]")
+                        ctx.console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
                 else:
-                    console.print(f"\n  [bold]Prompt ({len(ctx.current_prompt)} chars):[/]")
-                    console.print(Syntax(ctx.current_prompt, "text", theme="monokai", padding=(0, 2)))
-                console.print()
+                    ctx.console.print(f"\n  [bold]Prompt ({len(ctx.current_prompt)} chars):[/]")
+                    ctx.console.print(Syntax(ctx.current_prompt, "text", theme="monokai", padding=(0, 2)))
+                ctx.console.print()
 
-            for step in self.steps:
+            for step in steps:
                 step(ctx)
                 if ctx.stop:
                     break
             if ctx.stop:
                 break
 
+
+# ── LaunchWorkflow ───────────────────────────────────────
+
+
+class LaunchWorkflow(Workflow):
+    """Single-shot agent-based workflow: launch → select."""
+
+    def run(
+        self,
+        prompt: str,
+        *,
+        models: list[str] | None = None,
+        model_set: str | None = None,
+        n_samples: int = 5,
+        n_agents: int = 3,
+        max_steps: int = 10,
+        strategy: str = "top-k",
+        k: int = 3,
+        temperature: float = 0.7,
+        max_tokens: int = 16384,
+        solution_format: str = "code",
+        eval_script: str | None = None,
+        eval_context: dict[str, Any] | None = None,
+        evaluator_names: list[str] | None = None,
+        api_key: str | None = None,
+        store: Store | None = None,
+        verbose: bool = False,
+        full: bool = False,
+        console: Console | None = None,
+        syntax_lang: str = "python",
+    ) -> WorkflowResult:
+        """Execute the launch workflow and return results."""
+        self._n_agents = n_agents
+        self._max_steps = max_steps
+        ctx = self._build_context(
+            prompt,
+            models=models, model_set=model_set, n_samples=n_samples,
+            temperature=temperature, max_tokens=max_tokens,
+            solution_format=solution_format, eval_script=eval_script,
+            eval_context=eval_context, evaluator_names=evaluator_names,
+            api_key=api_key, store=store, verbose=verbose, full=full,
+            console=console, syntax_lang=syntax_lang, strategy=strategy,
+            k=k, rounds=1,
+        )
+        self._log_prompt_preview(ctx, solution_format)
+        self._execute(ctx)
         return WorkflowResult(
-            run_id=run.id,
+            run_id=ctx.run.id,
             best_score=ctx.best_score,
             round_scores=ctx.round_scores,
         )
+
+    def _execute(self, ctx: WorkflowContext) -> None:
+        launch_step(ctx, n_agents=self._n_agents, max_steps=self._max_steps)
+        select_step(ctx)
