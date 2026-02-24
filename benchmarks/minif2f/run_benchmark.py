@@ -164,7 +164,8 @@ def run_task(
         "task": task_name,
         "difficulty": task_info["difficulty"],
         "strategy": strategy,
-        "rounds": len(result.round_scores),
+        "mode": mode,
+        "iterations": max_steps if mode == "agent" else len(result.round_scores),
         "best_score": result.best_score,
         "solved": solved,
         "round_scores": result.round_scores,
@@ -236,7 +237,8 @@ def main():
     table.add_column("Task", style="cyan")
     table.add_column("Difficulty")
     table.add_column("Strategy", style="magenta")
-    table.add_column("Rounds", justify="right")
+    table.add_column("Mode")
+    table.add_column("Rounds/Steps", justify="right")
     table.add_column("Solved", justify="center")
     table.add_column("Per-Round Scores", style="dim")
     table.add_column("Run ID", style="dim")
@@ -245,7 +247,7 @@ def main():
         scores_str = " → ".join(f"{s:.0f}" for s in r["round_scores"])
         solved_str = "[bold green]YES[/]" if r["solved"] else "[red]no[/]"
         table.add_row(
-            r["task"], r["difficulty"], r["strategy"], str(r["rounds"]),
+            r["task"], r["difficulty"], r["strategy"], r["mode"], str(r["iterations"]),
             solved_str, scores_str, r["run_id"][:8],
         )
 
