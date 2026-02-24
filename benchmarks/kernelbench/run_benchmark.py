@@ -104,6 +104,7 @@ def run_task(
     max_tokens: int,
     solution_format: str = "code",
     eval_concurrency: int = 1,
+    eval_timeout: int = 60,
     verbose: bool = False,
     full: bool = False,
     mode: str = "sample",
@@ -138,7 +139,7 @@ def run_task(
                 max_tokens=max_tokens,
                 solution_format=solution_format,
                 eval_script=str(eval_wrapper),
-                eval_context={"file_extension": ".py"},
+                eval_context={"file_extension": ".py", "eval_timeout": eval_timeout},
                 verbose=verbose,
                 full=full,
                 console=console,
@@ -158,7 +159,7 @@ def run_task(
                 max_tokens=max_tokens,
                 solution_format=solution_format,
                 eval_script=str(eval_wrapper),
-                eval_context={"file_extension": ".py"},
+                eval_context={"file_extension": ".py", "eval_timeout": eval_timeout},
                 eval_concurrency=eval_concurrency,
                 verbose=verbose,
                 full=full,
@@ -197,6 +198,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--solution-format", default="code", help="Solution format: code, diff, raw (default: code)")
     parser.add_argument("-p", "--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
+    parser.add_argument("--eval-timeout", type=int, default=60, help="Timeout per evaluation in seconds (default: 60)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
     parser.add_argument("--full", action="store_true", help="Show full solutions (not truncated)")
     parser.add_argument("--mode", choices=["sample", "agent"], default="sample", help="Workflow mode (default: sample)")
@@ -226,6 +228,7 @@ def main():
                 max_tokens=args.max_tokens,
                 solution_format=args.solution_format,
                 eval_concurrency=args.eval_concurrency,
+                eval_timeout=args.eval_timeout,
                 verbose=args.verbose,
                 full=args.full,
                 mode=args.mode,

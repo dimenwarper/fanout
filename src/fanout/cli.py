@@ -64,6 +64,7 @@ def sample(
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
+    eval_timeout: Annotated[int, typer.Option("--eval-timeout", help="Timeout per evaluation in seconds")] = 60,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show solution previews with syntax highlighting")] = False,
     full: Annotated[bool, typer.Option("--full", help="Show full solutions (not truncated)")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
@@ -116,6 +117,7 @@ def sample(
             "eval_script": eval_script,
             "materializer": materializer,
             "file_extension": file_ext,
+            "eval_timeout": eval_timeout,
         }
         evals = evaluate_solutions(solutions, ["script"], store, context, concurrency=eval_concurrency)
         console.print(f"[bold green]Script evaluator:[/] {len(evals)} evaluations")
@@ -328,6 +330,7 @@ def run_loop(
     k_agg: Annotated[int, typer.Option("--k-agg", help="Number of parent solutions per aggregation prompt (RSA)")] = 6,
     solution_format: Annotated[str, typer.Option("--solution-format", help="Solution format: code, diff, raw")] = "code",
     eval_concurrency: Annotated[int, typer.Option("-p", "--eval-concurrency", help="Max parallel evaluations")] = 1,
+    eval_timeout: Annotated[int, typer.Option("--eval-timeout", help="Timeout per evaluation in seconds")] = 60,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
     full: Annotated[bool, typer.Option("--full", help="Show full solutions (not truncated)")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
@@ -369,6 +372,7 @@ def run_loop(
         context["eval_script"] = eval_script
         context["materializer"] = materializer
         context["file_extension"] = file_ext
+    context["eval_timeout"] = eval_timeout
     context = context or None
     parent_ids: list[str] | None = None
     strategy_instance = get_strategy(strategy)
