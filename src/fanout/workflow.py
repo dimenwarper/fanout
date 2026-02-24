@@ -26,6 +26,7 @@ from rich.syntax import Syntax
 
 from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
 from fanout.evaluate import evaluate_solutions
+from fanout.launch import launch as do_launch
 from fanout.providers.openrouter import SamplingConfig
 from fanout.sample import sample as do_sample
 from fanout.select import select_solutions
@@ -52,6 +53,8 @@ class WorkflowContext:
     eval_concurrency: int
     rounds: int
     api_key: str | None = None
+    n_agents: int = 3
+    max_steps: int = 10
 
     # ── Logging ──────────────────────────────────────────
     console: Console | None = None
@@ -169,6 +172,25 @@ def evolve_step(ctx: WorkflowContext) -> None:
         )
 
 
+def launch_step(ctx: WorkflowContext) -> None:
+    """Launch concurrent agents that iteratively produce and improve solutions."""
+    ctx.solutions = do_launch(
+        prompt=ctx.prompt,
+        models=ctx.config.models,
+        store=ctx.store,
+        run_id=ctx.run.id,
+        n_agents=ctx.n_agents,
+        max_steps=ctx.max_steps,
+        eval_script=ctx.eval_context.get("eval_script"),
+        materializer=ctx.eval_context.get("materializer", "file"),
+        file_ext=ctx.eval_context.get("file_extension", ".py"),
+        verbose=ctx.verbose,
+        api_key=ctx.api_key,
+    )
+    if ctx.console:
+        ctx.console.print(f"[dim]launched {ctx.n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
+
+
 # ── Workflow ─────────────────────────────────────────────
 
 
@@ -202,6 +224,8 @@ class Workflow:
         full: bool = False,
         console: Console | None = None,
         syntax_lang: str = "python",
+        n_agents: int = 3,
+        max_steps: int = 10,
     ) -> WorkflowResult:
         """Execute the workflow loop and return results."""
         if store is None:
@@ -250,6 +274,8 @@ class Workflow:
             verbose=verbose,
             full=full,
             syntax_lang=syntax_lang,
+            n_agents=n_agents,
+            max_steps=max_steps,
         )
 
         # Pre-loop: show prompt preview (verbose) or full system prompt + suffix (full)

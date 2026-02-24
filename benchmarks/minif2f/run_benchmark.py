@@ -28,7 +28,7 @@ from rich.table import Table
 
 from fanout.workflow import (
     Workflow, WorkflowContext,
-    sample_step, evaluate_step, select_step, evolve_step,
+    sample_step, evaluate_step, select_step, evolve_step, launch_step,
 )
 
 console = Console()
@@ -101,25 +101,35 @@ def run_task(
     eval_concurrency: int = 1,
     verbose: bool = False,
     full: bool = False,
+    mode: str = "sample",
+    n_agents: int = 3,
+    max_steps: int = 10,
 ) -> dict[str, Any]:
     console.rule(f"[bold cyan]Task: {task_name}[/]")
     console.print(f"  {task_info['description']} [{task_info['difficulty']}]")
-    if model_set:
+    if mode == "agent":
+        console.print(f"  Mode: agent, Agents: {n_agents}, Max steps: {max_steps}")
+    elif model_set:
         console.print(f"  Strategy: {strategy}, Rounds: {rounds}, Model set: {model_set} (N={n_samples})")
     else:
         console.print(f"  Strategy: {strategy}, Rounds: {rounds}, Models: {models}")
 
     prompt = build_prompt(task_name, task_info)
 
-    wf = Workflow(steps=[
-        sample_step, evaluate_step, select_step, stop_if_solved, evolve_step,
-    ])
+    if mode == "agent":
+        wf = Workflow(steps=[launch_step, select_step])
+        effective_rounds = 1
+    else:
+        wf = Workflow(steps=[
+            sample_step, evaluate_step, select_step, stop_if_solved, evolve_step,
+        ])
+        effective_rounds = rounds
     result = wf.run(
         prompt=prompt,
         models=models,
         model_set=model_set,
         n_samples=n_samples,
-        rounds=rounds,
+        rounds=effective_rounds,
         strategy=strategy,
         k=k,
         k_agg=k_agg,
@@ -133,6 +143,8 @@ def run_task(
         full=full,
         console=console,
         syntax_lang="lean4",
+        n_agents=n_agents,
+        max_steps=max_steps,
     )
 
     solved = result.best_score >= 1.0
@@ -171,6 +183,9 @@ def main():
     parser.add_argument("-p", "--eval-concurrency", type=int, default=1, help="Max parallel evaluations (default: 1)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show eval details, solution previews, and stderr")
     parser.add_argument("--full", action="store_true", help="Show full solutions (not truncated)")
+    parser.add_argument("--mode", choices=["sample", "agent"], default="sample", help="Workflow mode (default: sample)")
+    parser.add_argument("--n-agents", type=int, default=3, help="Number of agents for agent mode (default: 3)")
+    parser.add_argument("--max-steps", type=int, default=10, help="Max steps per agent (default: 10)")
     args = parser.parse_args()
 
     models = args.model or ["openai/gpt-4o-mini"]
@@ -197,6 +212,9 @@ def main():
                 eval_concurrency=args.eval_concurrency,
                 verbose=args.verbose,
                 full=args.full,
+                mode=args.mode,
+                n_agents=args.n_agents,
+                max_steps=args.max_steps,
             )
             results.append(result)
 

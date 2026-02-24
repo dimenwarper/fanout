@@ -19,6 +19,7 @@ from fanout.workflow import (
     WorkflowResult,
     evaluate_step,
     evolve_step,
+    launch_step,
     sample_step,
     select_step,
 )
@@ -322,3 +323,58 @@ class TestWorkflow:
         assert "top=" in output
         assert "best=" in output
         assert result.best_score > 0
+
+
+class TestLaunchStep:
+    @patch("fanout.workflow.do_launch")
+    def test_sets_solutions(self, mock_launch):
+        ctx = _make_ctx()
+        fake_solutions = [Solution(run_id=ctx.run.id, model="m", output="x")]
+        mock_launch.return_value = fake_solutions
+
+        launch_step(ctx)
+
+        assert ctx.solutions is fake_solutions
+        mock_launch.assert_called_once_with(
+            prompt=ctx.prompt,
+            models=ctx.config.models,
+            store=ctx.store,
+            run_id=ctx.run.id,
+            n_agents=ctx.n_agents,
+            max_steps=ctx.max_steps,
+            eval_script=ctx.eval_context.get("eval_script"),
+            materializer=ctx.eval_context.get("materializer", "file"),
+            file_ext=ctx.eval_context.get("file_extension", ".py"),
+            verbose=ctx.verbose,
+            api_key=ctx.api_key,
+        )
+
+    @patch("fanout.workflow.do_launch")
+    def test_agent_workflow_runs_one_round(self, mock_launch):
+        store = _make_store()
+
+        def fake_launch(**kwargs):
+            sol = Solution(run_id=kwargs["run_id"], round_num=0, model="m", output="code")
+            store.save_solution(sol)
+            ev = Evaluation(solution_id=sol.id, evaluator="script", score=0.9, raw_score=0.9)
+            store.save_evaluation(ev)
+            return [sol]
+
+        mock_launch.side_effect = fake_launch
+
+        wf = Workflow(steps=[launch_step, select_step])
+        result = wf.run(
+            prompt="solve this",
+            models=["test-model"],
+            rounds=1,
+            strategy="top-k",
+            k=1,
+            store=store,
+            n_agents=3,
+            max_steps=10,
+        )
+
+        assert isinstance(result, WorkflowResult)
+        assert len(result.round_scores) == 1
+        assert result.best_score == pytest.approx(0.9)
+        mock_launch.assert_called_once()
