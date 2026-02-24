@@ -14,7 +14,7 @@ class EvaluatorResult:
     """Result from an evaluator."""
 
     def __init__(self, score: float, raw_score: float = 0.0, details: dict[str, Any] | None = None):
-        self.score = max(0.0, min(1.0, score))  # clamp to [0, 1]
+        self.score = score
         self.raw_score = raw_score
         self.details = details or {}
 

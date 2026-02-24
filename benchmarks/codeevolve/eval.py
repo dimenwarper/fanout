@@ -6,7 +6,7 @@ Usage: ./eval.py <solution_file> [task_name]
 task_name: circle_packing | kissing_number | first_autocorr | heilbronn_triangle
 
 The solution file must define the task's entry function (e.g., circle_packing26()).
-Prints a score (0.0-1.0) on the last line, based on benchmark_ratio.
+Prints the raw metric value on the last line (e.g. sum of radii, num points).
 """
 
 from __future__ import annotations
@@ -60,9 +60,9 @@ def eval_circle_packing(sol) -> float:
             print(f"Overlap between circles {i} and {j}", file=sys.stderr)
             return 0.0
 
-    ratio = float(np.sum(rs)) / BENCHMARK
-    print(f"sum_radii={np.sum(rs):.6f} benchmark_ratio={ratio:.4f}", file=sys.stderr)
-    return min(1.0, ratio)
+    sum_radii = float(np.sum(rs))
+    print(f"sum_radii={sum_radii:.6f} benchmark={BENCHMARK:.6f}", file=sys.stderr)
+    return sum_radii
 
 
 def eval_kissing_number(sol) -> float:
@@ -96,9 +96,8 @@ def eval_kissing_number(sol) -> float:
         print(f"Constraint violated: max_norm={max_norm:.4f} > min_dist={min_dist:.4f}", file=sys.stderr)
         return 0.0
 
-    ratio = n / BENCHMARK
-    print(f"num_points={n} benchmark_ratio={ratio:.4f}", file=sys.stderr)
-    return min(1.0, ratio)
+    print(f"num_points={n} benchmark={BENCHMARK}", file=sys.stderr)
+    return float(n)
 
 
 def eval_first_autocorr(sol) -> float:
@@ -126,9 +125,8 @@ def eval_first_autocorr(sol) -> float:
     c1 = 2 * len(a) * np.max(b) / (s**2)
     inv_c1 = 1.0 / c1
 
-    ratio = inv_c1 / BENCHMARK_INV_C1
-    print(f"C1={c1:.6f} inv_c1={inv_c1:.6f} benchmark_ratio={ratio:.4f}", file=sys.stderr)
-    return min(1.0, ratio)
+    print(f"C1={c1:.6f} inv_c1={inv_c1:.6f} benchmark={BENCHMARK_INV_C1:.4f}", file=sys.stderr)
+    return inv_c1
 
 
 def eval_heilbronn(sol) -> float:
@@ -163,9 +161,8 @@ def eval_heilbronn(sol) -> float:
         normalized = area / tri_area
         min_area = min(min_area, normalized)
 
-    ratio = min_area / BENCHMARK
-    print(f"min_area_normalized={min_area:.8f} benchmark_ratio={ratio:.4f}", file=sys.stderr)
-    return min(1.0, ratio)
+    print(f"min_area_normalized={min_area:.8f} benchmark={BENCHMARK:.8f}", file=sys.stderr)
+    return min_area
 
 
 EVALUATORS = {
