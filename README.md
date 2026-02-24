@@ -46,12 +46,55 @@ flowchart TD
     style REDUCE fill:#0f3460,stroke:#16213e,color:#e0e0e0
 ```
 
-**Each round is one map-reduce cycle:**
+**Each round is one map-reduce cycle (SampleWorkflow):**
 
 1. **Fan out (map):** Send the prompt to one or more models, drawing N samples. Models can be specified explicitly (`-m`) or pulled from a weighted *model set* (`-M`).
 2. **Evaluate:** Run every solution through a stack of evaluators — built-in (latency, cost, accuracy) or a custom eval script that tests the output for real.
 3. **Select (reduce):** A selection strategy picks the top solutions. These become the parents for the next round.
 4. **Repeat:** The loop runs for as many rounds as you want, converging on better outputs each generation.
+
+### Agent-based workflow (LaunchWorkflow)
+
+Instead of the sample-evaluate-select loop, you can launch concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a single shot.
+
+```mermaid
+flowchart TD
+    P["Prompt"] --> L["Launch"]
+
+    subgraph AGENTS ["Concurrent Agents"]
+        L --> A1["Agent 1 (Model A)"]
+        L --> A2["Agent 2 (Model B)"]
+        L --> A3["Agent 3 (Model A)"]
+
+        A1 --> |"read / write / eval loop"| A1
+        A2 --> |"read / write / eval loop"| A2
+        A3 --> |"read / write / eval loop"| A3
+    end
+
+    A1 --> SP["Shared Solutions Pool"]
+    A2 --> SP
+    A3 --> SP
+
+    A1 -.-> |"read others' solutions"| SP
+    A2 -.-> |"read others' solutions"| SP
+    A3 -.-> |"read others' solutions"| SP
+
+    SP --> SEL["Select (top-k)"]
+    SEL --> W["Winner(s)"]
+
+    style AGENTS fill:#1a1a2e,stroke:#16213e,color:#e0e0e0
+    style SP fill:#0f3460,stroke:#16213e,color:#e0e0e0
+```
+
+Each agent runs for up to `--max-steps` iterations, using tools to read the task, submit solutions, run evaluations, and inspect other agents' work. Agents share a solution pool so they can learn from each other in real time.
+
+```bash
+# Launch 3 agents, each with up to 10 steps
+uv run fanout launch "Write a fast matrix multiply" \
+  -m openai/gpt-4o-mini -n 3 --max-steps 10 --eval-script ./eval.sh -v
+```
+
+Use `--mode agent` in benchmark runners to switch from the sample workflow to the launch workflow.
 
 ## Install
 
@@ -304,6 +347,7 @@ uv run fanout run "..." -M coding -n 5 -r 3 --eval-script ./eval.sh -v
 |---------|-------------|
 | `fanout run` | Full loop: sample, evaluate, select for N rounds |
 | `fanout sample` | Fan out a prompt to models |
+| `fanout launch` | Launch concurrent agents that iterate on solutions |
 | `fanout evaluate` | Score solutions with evaluators |
 | `fanout select` | Pick best solutions using a strategy |
 | `fanout store` | List runs or inspect a specific run |
@@ -317,7 +361,10 @@ uv run fanout run "..." -M coding -n 5 -r 3 --eval-script ./eval.sh -v
 ```
 src/fanout/
 ├── cli.py                 # Typer CLI entry point
+├── workflow.py            # Workflow classes (SampleWorkflow, LaunchWorkflow)
 ├── sample.py              # Sampling orchestration
+├── launch.py              # Agent-based launch orchestration
+├── agent_tools.py         # smolagents tools (read_prompt, write_solution, run_eval, etc.)
 ├── evaluate.py            # Evaluation orchestration (supports parallel via -p)
 ├── select.py              # Selection orchestration
 ├── store.py               # Storage facade (Redis → in-memory fallback)
