@@ -116,11 +116,11 @@ def run_task(
     console.rule(f"[bold cyan]Task: {task_name}[/]")
     console.print(f"  {task_info['description']}")
     if mode == "agent":
-        console.print(f"  Mode: agent, Strategy: {strategy}, Agents: {n_agents}, Max steps: {max_steps}")
+        console.print(f"  [bold]Mode:[/] agent, [bold]Strategy:[/] {strategy}, [bold]Agents:[/] {n_agents}, [bold]Max steps:[/] {max_steps}")
     elif model_set:
-        console.print(f"  Strategy: {strategy}, Rounds: {rounds}, Model set: {model_set} (N={n_samples})")
+        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Model set:[/] {model_set} (N={n_samples})")
     else:
-        console.print(f"  Strategy: {strategy}, Rounds: {rounds}, Models: {models}")
+        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Models:[/] {models}")
 
     prompt = build_prompt(task_name, task_info)
     eval_wrapper = make_task_eval_script(task_name)
