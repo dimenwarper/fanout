@@ -16,6 +16,12 @@ This is useful any time you want to treat LLM outputs as a population rather tha
 
 ## How it works
 
+There are two kinds of workflows: **Sample** and **Launch**. Both fan out work across multiple models in parallel, but they differ in how solutions are produced and refined.
+
+### Sample workflow
+
+The sample workflow is a multi-round evolutionary loop. Each round samples solutions from models, evaluates them, selects the best, and uses those to seed the next generation. This is the classic map-reduce pattern applied to LLM outputs.
+
 ```mermaid
 flowchart TD
     P["Prompt"] --> F["Fan Out"]
@@ -46,16 +52,16 @@ flowchart TD
     style REDUCE fill:#0f3460,stroke:#16213e,color:#e0e0e0
 ```
 
-**Each round is one map-reduce cycle (SampleWorkflow):**
+**Each round is one map-reduce cycle:**
 
 1. **Fan out (map):** Send the prompt to one or more models, drawing N samples. Models can be specified explicitly (`-m`) or pulled from a weighted *model set* (`-M`).
 2. **Evaluate:** Run every solution through a stack of evaluators — built-in (latency, cost, accuracy) or a custom eval script that tests the output for real.
 3. **Select (reduce):** A selection strategy picks the top solutions. These become the parents for the next round.
 4. **Repeat:** The loop runs for as many rounds as you want, converging on better outputs each generation.
 
-### Agent-based workflow (LaunchWorkflow)
+### Launch workflow
 
-Instead of the sample-evaluate-select loop, you can launch concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a single shot.
+The launch workflow takes a different approach: instead of externally orchestrating sample-evaluate-select rounds, it spawns concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a single shot.
 
 ```mermaid
 flowchart TD
