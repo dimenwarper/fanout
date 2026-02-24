@@ -7,8 +7,12 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+import re
+
 from rich.console import Console
+from rich.console import Group
 from rich.table import Table
+from rich.text import Text
 from rich.live import Live
 
 from fanout.db.models import Solution
@@ -36,12 +40,22 @@ class _AgentTracker:
     def __init__(self, agent_labels: list[str], max_steps: int, console: Console | None = None):
         self._lock = threading.Lock()
         self._max_steps = max_steps
+        self._top_score: float = 0.0
         self._agents: dict[str, dict[str, Any]] = {
             label: {"step": 0, "tool": "", "obs": "", "status": "running"}
             for label in agent_labels
         }
         self._console = console or Console()
-        self._live = Live(self._build_table(), console=self._console, refresh_per_second=4)
+        self._live = Live(self._build_display(), console=self._console, refresh_per_second=4)
+
+    _SCORE_RE = re.compile(r"Score:\s*([\d.]+)")
+
+    def _build_display(self) -> Group:
+        with self._lock:
+            score_line = Text(f"  Top score: {self._top_score:.4f}", style="bold green")
+
+        table = self._build_table()
+        return Group(score_line, table)
 
     def _build_table(self) -> Table:
         table = Table(show_header=True, header_style="dim", expand=False, pad_edge=False)
@@ -76,18 +90,24 @@ class _AgentTracker:
             self._agents[label]["step"] = step
             self._agents[label]["tool"] = tool
             self._agents[label]["obs"] = obs
-        self._live.update(self._build_table())
+            # Parse score from observation (e.g. "Score: 0.4932")
+            m = self._SCORE_RE.search(obs)
+            if m:
+                score = float(m.group(1))
+                if score > self._top_score:
+                    self._top_score = score
+        self._live.update(self._build_display())
 
     def mark_done(self, label: str) -> None:
         with self._lock:
             self._agents[label]["status"] = "done"
-        self._live.update(self._build_table())
+        self._live.update(self._build_display())
 
     def mark_error(self, label: str, err: str) -> None:
         with self._lock:
             self._agents[label]["status"] = "error"
             self._agents[label]["obs"] = err[:57]
-        self._live.update(self._build_table())
+        self._live.update(self._build_display())
 
     def __enter__(self):
         self._live.__enter__()
