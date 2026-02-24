@@ -39,6 +39,7 @@ def _run_single_agent(
 ) -> list[Solution]:
     """Run a single smolagents ToolCallingAgent. Returns solutions it produced."""
     from smolagents import ToolCallingAgent
+    from smolagents.monitoring import LogLevel
 
     from fanout.agent_tools import (
         ReadPromptTool,
@@ -70,6 +71,7 @@ def _run_single_agent(
         model=llm,
         max_steps=max_steps,
         instructions=AGENT_SYSTEM_PROMPT,
+        verbosity_level=LogLevel.DEBUG if verbose else LogLevel.ERROR,
     )
 
     task_msg = (
@@ -77,7 +79,7 @@ def _run_single_agent(
         "Use the available tools to read the prompt, submit solutions, evaluate them, "
         "and read what other agents have produced."
     )
-    agent.run(task_msg, verbose=verbose)
+    agent.run(task_msg)
 
     # Collect all solutions this agent produced (by model name + source metadata)
     all_solutions = store.get_solutions_for_run(run_id)
