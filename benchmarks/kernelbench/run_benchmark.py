@@ -114,7 +114,7 @@ def run_task(
     console.rule(f"[bold cyan]Task: {task_name}[/]")
     console.print(f"  {task_info['description']}")
     if mode == "agent":
-        console.print(f"  Mode: agent, Agents: {n_agents}, Max steps: {max_steps}")
+        console.print(f"  Mode: agent, Strategy: {strategy}, Agents: {n_agents}, Max steps: {max_steps}")
     elif model_set:
         console.print(f"  Strategy: {strategy}, Rounds: {rounds}, Model set: {model_set} (N={n_samples})")
     else:
