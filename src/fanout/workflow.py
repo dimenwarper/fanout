@@ -100,7 +100,7 @@ def sample_step(ctx: WorkflowContext) -> None:
     if ctx.console:
         counts = Counter(s.model for s in ctx.solutions)
         parts = [f"{m}(x{n})" if n > 1 else m for m, n in counts.items()]
-        ctx.console.print(f"sampled [{', '.join(parts)}]", end=" ")
+        ctx.console.print(f"[dim]sampled \\[{', '.join(parts)}][/]", end=" ")
 
 
 def evaluate_step(ctx: WorkflowContext) -> None:
@@ -129,24 +129,29 @@ def select_step(ctx: WorkflowContext) -> None:
 
     if ctx.console:
         ctx.console.print(f"top={top_score:.4f} best={ctx.best_score:.4f}")
-        if (ctx.verbose or ctx.full) and ctx.selected:
-            for i, sw in enumerate(ctx.selected):
-                code = extract_solution(sw.solution.output)
-                if not ctx.full:
-                    lines = code.splitlines()
-                    if len(lines) > 20:
-                        code = "\n".join(lines[:20]) + f"\n... ({len(lines) - 20} more lines)"
-                ctx.console.print(f"  [{i + 1}] score={sw.aggregate_score:.4f} model={sw.solution.model}")
-                ctx.console.print(Syntax(code, ctx.syntax_lang, theme="monokai", line_numbers=True))
-                # Show eval details if available
-                for ev in sw.evaluations:
-                    d = ev.details
-                    parts = [f"exit={d['exit_code']}" if "exit_code" in d else None,
-                             f"stderr={d['stderr']!r}" if d.get("stderr") else None,
-                             f"stdout={d['stdout']!r}" if d.get("stdout") else None]
-                    detail = " ".join(p for p in parts if p)
-                    if detail:
-                        ctx.console.print(f"    {detail}")
+        if (ctx.verbose or ctx.full) and ctx.solutions:
+            for i, sol in enumerate(ctx.solutions):
+                # Find matching evaluation
+                evals = [e for e in ctx.evaluations if e.solution_id == sol.id]
+                ev = evals[0] if evals else None
+                score = ev.score if ev else 0.0
+                exit_code = ev.details.get("exit_code", "?") if ev else "?"
+                stderr = ev.details.get("stderr", "") if ev else ""
+                stdout = ev.details.get("stdout", "") if ev else ""
+
+                if ctx.full:
+                    preview = sol.output
+                else:
+                    extracted = extract_solution(sol.output)
+                    preview_lines = extracted[:500].splitlines()[:15]
+                    preview = "\n".join(preview_lines)
+
+                ctx.console.print(f"    [dim]Solution {i + 1} [{sol.model}] score={score:.4f} exit={exit_code}[/]")
+                ctx.console.print(Syntax(preview, ctx.syntax_lang, theme="monokai", line_numbers=True, padding=(0, 2)))
+                if stderr:
+                    ctx.console.print(f"      [dim]stderr: {stderr}[/]")
+                if score == 0.0 and stdout:
+                    ctx.console.print(f"      [dim]stdout: {stdout}[/]")
 
 
 def evolve_step(ctx: WorkflowContext) -> None:
@@ -247,33 +252,36 @@ class Workflow:
             syntax_lang=syntax_lang,
         )
 
-        # Pre-loop: show system prompt + prompt suffix
+        # Pre-loop: show prompt preview (verbose) or full system prompt + suffix (full)
+        if console and verbose and not full:
+            console.print(f"\n  [dim]Prompt ({len(prompt)} chars):[/]")
+            console.print(f"  [dim]{prompt[:200]}...[/]\n")
+
         if full and console:
             fmt = get_format(solution_format)
             if fmt.system_prompt:
-                console.print("[dim]System prompt:[/dim]")
-                console.print(fmt.system_prompt)
+                console.print(f"\n  [bold]System prompt:[/]")
+                console.print(Syntax(fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
             if fmt.prompt_suffix:
-                console.print("[dim]Prompt suffix:[/dim]")
-                console.print(fmt.prompt_suffix)
-            console.print()
+                console.print(f"\n  [bold]Prompt suffix (appended to all user prompts):[/]")
+                console.print(Syntax(fmt.prompt_suffix, "text", theme="monokai", padding=(0, 2)))
 
         for rnd in range(rounds):
             ctx.round_num = rnd
 
             if console:
-                console.print(f"Round {rnd + 1}/{rounds}...", end=" ")
+                console.print(f"  [dim]Round {rnd + 1}/{rounds}...[/]", end=" ")
 
             # Pre-sample: show current prompt(s)
             if full and console:
-                console.print()
                 if isinstance(ctx.current_prompt, list):
                     for i, p in enumerate(ctx.current_prompt):
-                        console.print(f"[dim]Prompt {i + 1}:[/dim]")
-                        console.print(p)
+                        console.print(f"\n  [bold]Prompt {i + 1}/{len(ctx.current_prompt)} ({len(p)} chars):[/]")
+                        console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
                 else:
-                    console.print(f"[dim]Prompt:[/dim]")
-                    console.print(ctx.current_prompt)
+                    console.print(f"\n  [bold]Prompt ({len(ctx.current_prompt)} chars):[/]")
+                    console.print(Syntax(ctx.current_prompt, "text", theme="monokai", padding=(0, 2)))
+                console.print()
 
             for step in self.steps:
                 step(ctx)
