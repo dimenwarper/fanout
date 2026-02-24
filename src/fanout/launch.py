@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+
+from rich.console import Console
+from rich.table import Table
+from rich.live import Live
 
 from fanout.db.models import Solution
 from fanout.store import Store
@@ -25,6 +30,92 @@ Focus on producing correct, high-quality solutions. Learn from other agents' sol
 """
 
 
+class _AgentTracker:
+    """Thread-safe tracker for agent step progress, rendered via Rich Live."""
+
+    def __init__(self, agent_labels: list[str], max_steps: int, console: Console | None = None):
+        self._lock = threading.Lock()
+        self._max_steps = max_steps
+        self._agents: dict[str, dict[str, Any]] = {
+            label: {"step": 0, "tool": "", "obs": "", "status": "running"}
+            for label in agent_labels
+        }
+        self._console = console or Console()
+        self._live = Live(self._build_table(), console=self._console, refresh_per_second=4)
+
+    def _build_table(self) -> Table:
+        table = Table(show_header=True, header_style="dim", expand=False, pad_edge=False)
+        table.add_column("Agent", style="cyan", min_width=20)
+        table.add_column("Step", justify="right", min_width=8)
+        table.add_column("Tool", min_width=16)
+        table.add_column("Observation", max_width=60)
+
+        with self._lock:
+            for label, info in self._agents.items():
+                status = info["status"]
+                if status == "done":
+                    style = "dim"
+                    step_str = "done"
+                elif status == "error":
+                    style = "red"
+                    step_str = "error"
+                else:
+                    style = ""
+                    step_str = f"{info['step']}/{self._max_steps}"
+
+                obs = info["obs"]
+                if len(obs) > 57:
+                    obs = obs[:57] + "..."
+
+                table.add_row(label, step_str, info["tool"], obs, style=style)
+
+        return table
+
+    def update(self, label: str, step: int, tool: str, obs: str) -> None:
+        with self._lock:
+            self._agents[label]["step"] = step
+            self._agents[label]["tool"] = tool
+            self._agents[label]["obs"] = obs
+        self._live.update(self._build_table())
+
+    def mark_done(self, label: str) -> None:
+        with self._lock:
+            self._agents[label]["status"] = "done"
+        self._live.update(self._build_table())
+
+    def mark_error(self, label: str, err: str) -> None:
+        with self._lock:
+            self._agents[label]["status"] = "error"
+            self._agents[label]["obs"] = err[:57]
+        self._live.update(self._build_table())
+
+    def __enter__(self):
+        self._live.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self._live.__exit__(*args)
+
+
+def _make_step_callback(label: str, tracker: _AgentTracker):
+    """Return a step_callbacks dict for a single agent."""
+    from smolagents.memory import ActionStep
+
+    def on_step(step: ActionStep):
+        tool = ""
+        obs = ""
+        if step.tool_calls:
+            tool = step.tool_calls[0].name
+        if step.observations:
+            # Take first line, strip whitespace
+            obs = step.observations.strip().splitlines()[0]
+        elif step.error:
+            obs = str(step.error).strip().splitlines()[0]
+        tracker.update(label, step.step_number, tool, obs)
+
+    return {ActionStep: on_step}
+
+
 def _run_single_agent(
     prompt: str,
     model: str,
@@ -34,8 +125,9 @@ def _run_single_agent(
     eval_script: str | None,
     materializer: str,
     file_ext: str,
-    verbose: bool,
     api_key: str | None,
+    label: str,
+    tracker: _AgentTracker | None,
 ) -> list[Solution]:
     """Run a single smolagents ToolCallingAgent. Returns solutions it produced."""
     from smolagents import ToolCallingAgent
@@ -66,12 +158,15 @@ def _run_single_agent(
 
     llm = _make_model(model, api_key)
 
+    step_callbacks = _make_step_callback(label, tracker) if tracker else None
+
     agent = ToolCallingAgent(
         tools=tools,
         model=llm,
         max_steps=max_steps,
         instructions=AGENT_SYSTEM_PROMPT,
-        verbosity_level=LogLevel.DEBUG if verbose else LogLevel.ERROR,
+        verbosity_level=LogLevel.OFF,
+        step_callbacks=step_callbacks,
     )
 
     task_msg = (
@@ -114,6 +209,7 @@ def launch(
     concurrency: int | None = None,
     verbose: bool = False,
     api_key: str | None = None,
+    console: Console | None = None,
 ) -> list[Solution]:
     """Launch concurrent agents that iteratively produce solutions.
 
@@ -124,35 +220,50 @@ def launch(
 
     # Distribute models round-robin
     agent_models = [models[i % len(models)] for i in range(n_agents)]
+    agent_labels = [f"Agent {i+1} ({m})" for i, m in enumerate(agent_models)]
 
     all_solutions: list[Solution] = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(
-                _run_single_agent,
-                prompt=prompt,
-                model=agent_model,
-                store=store,
-                run_id=run_id,
-                max_steps=max_steps,
-                eval_script=eval_script,
-                materializer=materializer,
-                file_ext=file_ext,
-                verbose=verbose,
-                api_key=api_key,
-            ): agent_model
-            for agent_model in agent_models
-        }
+    tracker = _AgentTracker(agent_labels, max_steps, console=console) if verbose else None
 
-        for future in as_completed(futures):
-            model_name = futures[future]
-            try:
-                solutions = future.result()
-                all_solutions.extend(solutions)
-            except Exception as e:
-                if verbose:
-                    import sys
-                    print(f"Agent ({model_name}) failed: {e}", file=sys.stderr)
+    ctx_manager = tracker if tracker else _nullcontext()
+    with ctx_manager:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    _run_single_agent,
+                    prompt=prompt,
+                    model=agent_model,
+                    store=store,
+                    run_id=run_id,
+                    max_steps=max_steps,
+                    eval_script=eval_script,
+                    materializer=materializer,
+                    file_ext=file_ext,
+                    api_key=api_key,
+                    label=label,
+                    tracker=tracker,
+                ): (agent_model, label)
+                for agent_model, label in zip(agent_models, agent_labels)
+            }
+
+            for future in as_completed(futures):
+                model_name, label = futures[future]
+                try:
+                    solutions = future.result()
+                    all_solutions.extend(solutions)
+                    if tracker:
+                        tracker.mark_done(label)
+                except Exception as e:
+                    if tracker:
+                        tracker.mark_error(label, str(e))
+                    elif verbose:
+                        import sys
+                        print(f"Agent ({model_name}) failed: {e}", file=sys.stderr)
 
     return all_solutions
+
+
+class _nullcontext:
+    def __enter__(self): return self
+    def __exit__(self, *args): pass

@@ -328,6 +328,7 @@ class TestLaunchWorkflow:
             file_ext=ctx.eval_context.get("file_extension", ".py"),
             verbose=ctx.verbose,
             api_key=ctx.api_key,
+            console=ctx.console,
         )
 
     @patch("fanout.workflow.do_launch")

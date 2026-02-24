@@ -189,6 +189,7 @@ def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10)
         file_ext=ctx.eval_context.get("file_extension", ".py"),
         verbose=ctx.verbose,
         api_key=ctx.api_key,
+        console=ctx.console,
     )
     if ctx.console:
         ctx.console.print(f"[dim]launched {n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
