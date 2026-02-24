@@ -17,6 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+agents = ["smolagents[openai]>=1.0"]
 test = [
     "pytest>=8.0",
 ]

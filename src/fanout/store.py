@@ -87,6 +87,10 @@ class Store:
         )
         return sol
 
+    def get_solution(self, solution_id: str) -> Solution | None:
+        data = self.ch.get("solutions", solution_id)
+        return Solution(**data) if data else None
+
     def get_solutions_for_run(self, run_id: str, round_num: int | None = None) -> list[Solution]:
         filters: dict[str, str] = {"run_id": run_id}
         if round_num is not None:

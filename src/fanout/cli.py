@@ -155,6 +155,81 @@ def sample(
         console.print(table)
 
 
+# ── launch ────────────────────────────────────────────────
+
+@app.command()
+def launch(
+    prompt: Annotated[str, typer.Argument(help="The prompt to send to agents")],
+    model: Annotated[Optional[list[str]], typer.Option("-m", "--model", help="Model to use (repeatable)")] = None,
+    model_set: Annotated[Optional[str], typer.Option("-M", "--model-set", help="Named model set")] = None,
+    n_agents: Annotated[int, typer.Option("-n", "--n-agents", help="Number of agents to launch")] = 3,
+    max_steps: Annotated[int, typer.Option("--max-steps", help="Max agent iterations")] = 10,
+    eval_script: Annotated[Optional[str], typer.Option("--eval-script", help="Path to eval script")] = None,
+    materializer: Annotated[str, typer.Option("--materializer", help="Materializer name")] = "file",
+    file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
+    concurrency: Annotated[Optional[int], typer.Option("--concurrency", help="Max concurrent agents")] = None,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show agent output")] = False,
+    api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
+) -> None:
+    """Launch concurrent agents that iteratively produce and improve solutions."""
+    from fanout.db.models import Run
+    from fanout.launch import launch as do_launch
+
+    store = _get_store()
+
+    # Resolve models
+    models = model or ["openai/gpt-4o-mini"]
+    if model_set:
+        ms = load_model_sets().get(model_set)
+        if ms:
+            models = [e.model for e in ms.models]
+
+    run = Run(prompt=prompt)
+    store.save_run(run)
+    console.print(f"[bold green]Created run:[/] {run.id}")
+    console.print(f"Launching {n_agents} agent(s) with max {max_steps} steps each")
+
+    solutions = do_launch(
+        prompt=prompt,
+        models=models,
+        store=store,
+        run_id=run.id,
+        n_agents=n_agents,
+        max_steps=max_steps,
+        eval_script=eval_script,
+        materializer=materializer,
+        file_ext=file_ext,
+        concurrency=concurrency,
+        verbose=verbose,
+        api_key=api_key,
+    )
+
+    console.print(f"\n[bold green]Done.[/] {len(solutions)} solution(s) produced")
+
+    # Show results
+    scored = store.get_solutions_with_scores(run.id)
+    if scored:
+        table = Table(title=f"Solutions (run {run.id})")
+        table.add_column("ID", style="cyan")
+        table.add_column("Model")
+        table.add_column("Score", justify="right", style="bold")
+        table.add_column("Iteration", justify="right")
+        table.add_column("Output (preview)")
+        for s in scored:
+            extracted = extract_solution(s.solution.output)
+            iteration = s.solution.metadata.get("iteration", "?")
+            table.add_row(
+                s.solution.id,
+                s.solution.model,
+                f"{s.aggregate_score:.3f}",
+                str(iteration),
+                extracted[:80] + ("..." if len(extracted) > 80 else ""),
+            )
+        console.print(table)
+
+    console.print(f"Run ID: {run.id}")
+
+
 # ── evaluate ──────────────────────────────────────────────
 
 @app.command()
