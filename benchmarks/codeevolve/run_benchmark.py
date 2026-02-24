@@ -136,11 +136,10 @@ def run_task(
             eval_script=str(eval_wrapper),
             eval_context={"file_extension": ".py"},
             eval_concurrency=eval_concurrency,
+            verbose=verbose,
+            full=full,
+            console=console,
         )
-
-        for i, score in enumerate(result.round_scores):
-            console.print(f"  Round {i + 1}/{rounds}: top={score:.4f}")
-        console.print(f"  Best: {result.best_score:.4f}")
 
         return {
             "task": task_name,

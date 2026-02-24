@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.console import Console
 
 from fanout.channels.memory import MemoryChannel
 from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
@@ -273,3 +275,50 @@ class TestWorkflow:
 
         assert result.best_score == pytest.approx(1.0)
         assert len(result.round_scores) == 2  # stopped after round 1
+
+    @patch("fanout.workflow.do_sample")
+    @patch("fanout.workflow.evaluate_solutions")
+    def test_verbose_logging_runs_without_error(self, mock_eval, mock_sample):
+        store = _make_store()
+
+        def fake_sample(prompt, config, store, run_id, round_num, parent_ids, api_key=None):
+            sol = Solution(run_id=run_id, round_num=round_num, model="m", output="print('hi')")
+            store.save_solution(sol)
+            return [sol]
+
+        def fake_eval(solutions, evaluator_names, store, context, concurrency=1):
+            evals = []
+            for sol in solutions:
+                ev = Evaluation(
+                    solution_id=sol.id, evaluator="script",
+                    score=0.5, exit_code=0, stderr="", stdout="ok",
+                )
+                store.save_evaluation(ev)
+                evals.append(ev)
+            return evals
+
+        mock_sample.side_effect = fake_sample
+        mock_eval.side_effect = fake_eval
+
+        buf = StringIO()
+        test_console = Console(file=buf, force_terminal=False)
+
+        wf = Workflow(steps=[sample_step, evaluate_step, select_step, evolve_step])
+        result = wf.run(
+            prompt="solve this",
+            models=["test-model"],
+            rounds=2,
+            strategy="top-k",
+            k=1,
+            store=store,
+            verbose=True,
+            console=test_console,
+        )
+
+        output = buf.getvalue()
+        assert "Round 1/2" in output
+        assert "Round 2/2" in output
+        assert "sampled" in output
+        assert "top=" in output
+        assert "best=" in output
+        assert result.best_score > 0

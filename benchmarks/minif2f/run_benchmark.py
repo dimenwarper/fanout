@@ -129,14 +129,13 @@ def run_task(
         eval_script=EVAL_SCRIPT,
         eval_context={"file_extension": ".lean"},
         eval_concurrency=eval_concurrency,
+        verbose=verbose,
+        full=full,
+        console=console,
+        syntax_lang="lean4",
     )
 
     solved = result.best_score >= 1.0
-    for i, score in enumerate(result.round_scores):
-        if score >= 1.0:
-            console.print(f"  Round {i + 1}: [bold green]SOLVED (QED)[/]")
-        else:
-            console.print(f"  Round {i + 1}: top={score:.4f}")
 
     return {
         "task": task_name,

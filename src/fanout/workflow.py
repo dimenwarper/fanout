@@ -17,14 +17,19 @@ Usage::
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+from rich.console import Console
+from rich.syntax import Syntax
 
 from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
 from fanout.evaluate import evaluate_solutions
 from fanout.providers.openrouter import SamplingConfig
 from fanout.sample import sample as do_sample
 from fanout.select import select_solutions
+from fanout.solution_format import extract_solution, get_format
 from fanout.store import Store
 from fanout.strategies.base import BaseStrategy, get_strategy
 
@@ -47,6 +52,12 @@ class WorkflowContext:
     eval_concurrency: int
     rounds: int
     api_key: str | None = None
+
+    # ── Logging ──────────────────────────────────────────
+    console: Console | None = None
+    verbose: bool = False
+    full: bool = False
+    syntax_lang: str = "python"
 
     # ── Set during loop ──────────────────────────────────
     round_num: int = 0
@@ -86,6 +97,10 @@ def sample_step(ctx: WorkflowContext) -> None:
         ctx.parent_ids,
         api_key=ctx.api_key,
     )
+    if ctx.console:
+        counts = Counter(s.model for s in ctx.solutions)
+        parts = [f"{m}(x{n})" if n > 1 else m for m, n in counts.items()]
+        ctx.console.print(f"sampled [{', '.join(parts)}]", end=" ")
 
 
 def evaluate_step(ctx: WorkflowContext) -> None:
@@ -111,6 +126,27 @@ def select_step(ctx: WorkflowContext) -> None:
     top_score = ctx.selected[0].aggregate_score if ctx.selected else 0.0
     ctx.round_scores.append(top_score)
     ctx.best_score = max(ctx.best_score, top_score)
+
+    if ctx.console:
+        ctx.console.print(f"top={top_score:.4f} best={ctx.best_score:.4f}")
+        if (ctx.verbose or ctx.full) and ctx.selected:
+            for i, sw in enumerate(ctx.selected):
+                code = extract_solution(sw.solution.output)
+                if not ctx.full:
+                    lines = code.splitlines()
+                    if len(lines) > 20:
+                        code = "\n".join(lines[:20]) + f"\n... ({len(lines) - 20} more lines)"
+                ctx.console.print(f"  [{i + 1}] score={sw.aggregate_score:.4f} model={sw.solution.model}")
+                ctx.console.print(Syntax(code, ctx.syntax_lang, theme="monokai", line_numbers=True))
+                # Show eval details if available
+                for ev in sw.evaluations:
+                    d = ev.details
+                    parts = [f"exit={d['exit_code']}" if "exit_code" in d else None,
+                             f"stderr={d['stderr']!r}" if d.get("stderr") else None,
+                             f"stdout={d['stdout']!r}" if d.get("stdout") else None]
+                    detail = " ".join(p for p in parts if p)
+                    if detail:
+                        ctx.console.print(f"    {detail}")
 
 
 def evolve_step(ctx: WorkflowContext) -> None:
@@ -157,6 +193,10 @@ class Workflow:
         eval_concurrency: int = 1,
         api_key: str | None = None,
         store: Store | None = None,
+        verbose: bool = False,
+        full: bool = False,
+        console: Console | None = None,
+        syntax_lang: str = "python",
     ) -> WorkflowResult:
         """Execute the workflow loop and return results."""
         if store is None:
@@ -182,6 +222,10 @@ class Workflow:
 
         strategy_instance = get_strategy(strategy)
 
+        # Enable console logging if verbose/full requested
+        if (verbose or full) and console is None:
+            console = Console()
+
         ctx = WorkflowContext(
             prompt=prompt,
             store=store,
@@ -197,10 +241,40 @@ class Workflow:
             rounds=rounds,
             api_key=api_key,
             current_prompt=prompt,
+            console=console,
+            verbose=verbose,
+            full=full,
+            syntax_lang=syntax_lang,
         )
+
+        # Pre-loop: show system prompt + prompt suffix
+        if full and console:
+            fmt = get_format(solution_format)
+            if fmt.system_prompt:
+                console.print("[dim]System prompt:[/dim]")
+                console.print(fmt.system_prompt)
+            if fmt.prompt_suffix:
+                console.print("[dim]Prompt suffix:[/dim]")
+                console.print(fmt.prompt_suffix)
+            console.print()
 
         for rnd in range(rounds):
             ctx.round_num = rnd
+
+            if console:
+                console.print(f"Round {rnd + 1}/{rounds}...", end=" ")
+
+            # Pre-sample: show current prompt(s)
+            if full and console:
+                console.print()
+                if isinstance(ctx.current_prompt, list):
+                    for i, p in enumerate(ctx.current_prompt):
+                        console.print(f"[dim]Prompt {i + 1}:[/dim]")
+                        console.print(p)
+                else:
+                    console.print(f"[dim]Prompt:[/dim]")
+                    console.print(ctx.current_prompt)
+
             for step in self.steps:
                 step(ctx)
                 if ctx.stop:
