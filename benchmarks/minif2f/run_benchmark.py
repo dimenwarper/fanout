@@ -24,17 +24,12 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 from rich.console import Console
-from rich.syntax import Syntax
 from rich.table import Table
 
-from fanout.db.models import Run
-from fanout.evaluate import evaluate_solutions
-from fanout.providers.openrouter import SamplingConfig
-from fanout.sample import sample as do_sample
-from fanout.select import select_solutions
-from fanout.store import Store
-from fanout.solution_format import extract_solution
-from fanout.strategies.base import get_strategy
+from fanout.workflow import (
+    Workflow, WorkflowContext,
+    sample_step, evaluate_step, select_step, evolve_step,
+)
 
 console = Console()
 
@@ -83,6 +78,12 @@ def build_prompt(task_name: str, task_info: dict) -> str:
     )
 
 
+def stop_if_solved(ctx: WorkflowContext) -> None:
+    """Stop early when proof is found."""
+    if ctx.best_score >= 1.0:
+        ctx.stop = True
+
+
 def run_task(
     task_name: str,
     task_info: dict,
@@ -110,122 +111,42 @@ def run_task(
 
     prompt = build_prompt(task_name, task_info)
 
-    if verbose and not full:
-        console.print(f"\n  [dim]Prompt ({len(prompt)} chars):[/]")
-        console.print(f"  [dim]{prompt[:200]}...[/]\n")
-
-    store = Store()
-    run = Run(prompt=prompt, total_rounds=rounds)
-    store.save_run(run)
-
-    config = SamplingConfig(
+    wf = Workflow(steps=[
+        sample_step, evaluate_step, select_step, stop_if_solved, evolve_step,
+    ])
+    result = wf.run(
+        prompt=prompt,
         models=models,
-        temperature=temperature,
-        max_tokens=max_tokens,
         model_set=model_set,
         n_samples=n_samples,
+        rounds=rounds,
+        strategy=strategy,
+        k=k,
+        k_agg=k_agg,
+        temperature=temperature,
+        max_tokens=max_tokens,
         solution_format=solution_format,
+        eval_script=EVAL_SCRIPT,
+        eval_context={"file_extension": ".lean"},
+        eval_concurrency=eval_concurrency,
     )
-    context: dict[str, Any] = {
-        "eval_script": EVAL_SCRIPT,
-        "materializer": "file",
-        "file_extension": ".lean",
-    }
-    evaluator_names = ["script"]
-    strategy_instance = get_strategy(strategy)
-    current_prompt: str | list[str] = prompt
-    parent_ids: list[str] | None = None
 
-    best_score = 0.0
-    round_scores: list[float] = []
-    solved = False
-
-    if full:
-        from fanout.solution_format import get_format as _get_format
-        _fmt = _get_format(solution_format)
-        if _fmt.system_prompt:
-            console.print(f"\n  [bold]System prompt:[/]")
-            console.print(Syntax(_fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
-        if _fmt.prompt_suffix:
-            console.print(f"\n  [bold]Prompt suffix (appended to all user prompts):[/]")
-            console.print(Syntax(_fmt.prompt_suffix, "text", theme="monokai", padding=(0, 2)))
-
-    for rnd in range(rounds):
-        console.print(f"  [dim]Round {rnd + 1}/{rounds}...[/]", end=" ")
-
-        if full:
-            if isinstance(current_prompt, list):
-                for pi, p in enumerate(current_prompt):
-                    console.print(f"\n  [bold]Prompt {pi+1}/{len(current_prompt)} ({len(p)} chars):[/]")
-                    console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
-            else:
-                console.print(f"\n  [bold]Prompt ({len(current_prompt)} chars):[/]")
-                console.print(Syntax(current_prompt, "text", theme="monokai", padding=(0, 2)))
-            console.print()
-
-        solutions = do_sample(current_prompt, config, store, run.id, rnd, parent_ids)
-
-        from collections import Counter
-        model_counts = Counter(s.model for s in solutions)
-        models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
-        console.print(f"[dim]sampled \\[{models_str}][/]", end=" ")
-
-        evals = evaluate_solutions(solutions, evaluator_names, store, context, concurrency=eval_concurrency)
-        selected = select_solutions(run.id, rnd, strategy, store, k=k)
-
-        top_score = selected[0].aggregate_score if selected else 0.0
-        round_scores.append(top_score)
-        best_score = max(best_score, top_score)
-
-        if top_score >= 1.0:
-            console.print(f"[bold green]SOLVED (QED)[/]")
-            solved = True
+    solved = result.best_score >= 1.0
+    for i, score in enumerate(result.round_scores):
+        if score >= 1.0:
+            console.print(f"  Round {i + 1}: [bold green]SOLVED (QED)[/]")
         else:
-            console.print(f"top={top_score:.4f}")
-
-        if verbose or full:
-            for i, (sol, ev) in enumerate(zip(solutions, evals)):
-                stderr = ev.details.get("stderr", "")
-                stdout = ev.details.get("stdout", "")
-                exit_code = ev.details.get("exit_code", "?")
-                if full:
-                    preview = sol.output
-                else:
-                    extracted = extract_solution(sol.output)
-                    preview_lines = extracted[:500].splitlines()[:15]
-                    preview = "\n".join(preview_lines)
-                console.print(f"    [dim]Solution {i+1} [{sol.model}] score={ev.score:.4f} exit={exit_code}[/]")
-                console.print(Syntax(preview, "lean4", theme="monokai", line_numbers=True, padding=(0, 2)))
-                if stderr:
-                    console.print(f"      [dim]stderr: {stderr}[/]")
-                if ev.score == 0.0 and stdout:
-                    console.print(f"      [dim]stdout: {stdout}[/]")
-
-        store.update_run_round(run.id, rnd + 1)
-        parent_ids = [s.solution.id for s in selected]
-
-        # Stop early if solved
-        if solved:
-            break
-
-        if rnd < rounds - 1:
-            current_prompt = strategy_instance.build_prompts(
-                original_prompt=prompt,
-                selected=selected,
-                round_num=rnd,
-                n_samples=config.n_samples,
-                k_agg=k_agg,
-            )
+            console.print(f"  Round {i + 1}: top={score:.4f}")
 
     return {
         "task": task_name,
         "difficulty": task_info["difficulty"],
         "strategy": strategy,
-        "rounds": len(round_scores),
-        "best_score": best_score,
+        "rounds": len(result.round_scores),
+        "best_score": result.best_score,
         "solved": solved,
-        "round_scores": round_scores,
-        "run_id": run.id,
+        "round_scores": result.round_scores,
+        "run_id": result.run_id,
     }
 
 
