@@ -69,7 +69,7 @@ def _run_single_agent(
         tools=tools,
         model=llm,
         max_steps=max_steps,
-        system_prompt=AGENT_SYSTEM_PROMPT,
+        instructions=AGENT_SYSTEM_PROMPT,
     )
 
     task_msg = (
