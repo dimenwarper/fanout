@@ -135,7 +135,7 @@ def select_step(ctx: WorkflowContext) -> None:
 
     if ctx.console:
         ctx.console.print(f"top={top_score:.4f} best={ctx.best_score:.4f}")
-        if (ctx.verbose or ctx.full) and ctx.solutions:
+        if ctx.full and ctx.solutions:
             for i, sol in enumerate(ctx.solutions):
                 # Find matching evaluation
                 evals = [e for e in ctx.evaluations if e.solution_id == sol.id]

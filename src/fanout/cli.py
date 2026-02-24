@@ -122,19 +122,14 @@ def sample(
         evals = evaluate_solutions(solutions, ["script"], store, context, concurrency=eval_concurrency)
         console.print(f"[bold green]Script evaluator:[/] {len(evals)} evaluations")
 
-    if verbose or full:
+    if full:
         lexer = _ext_to_lexer(file_ext)
         for i, sol in enumerate(solutions):
             score_str = ""
             if evals:
                 score_str = f" score={evals[i].score:.4f}"
             console.print(f"  [dim]Solution {i+1} [{sol.model}]{score_str} latency={sol.latency_ms:.0f}ms[/]")
-            if full:
-                preview = sol.output
-            else:
-                extracted = extract_solution(sol.output)
-                preview_lines = extracted[:500].splitlines()[:15]
-                preview = "\n".join(preview_lines)
+            preview = sol.output
             console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
             if evals:
                 stderr = evals[i].details.get("stderr", "")
@@ -424,18 +419,13 @@ def run_loop(
         for i, s in enumerate(selected[:3], 1):
             console.print(f"  #{i} [{s.solution.model}] score={s.aggregate_score:.3f}")
 
-        if verbose or full:
+        if full:
             for i, sol in enumerate(solutions):
                 ev = evals[i] if i < len(evals) else None
                 score_str = f" score={ev.score:.4f}" if ev else ""
                 exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
                 console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
-                if full:
-                    preview = sol.output
-                else:
-                    extracted = extract_solution(sol.output)
-                    preview_lines = extracted[:500].splitlines()[:15]
-                    preview = "\n".join(preview_lines)
+                preview = sol.output
                 console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
                 if ev:
                     stderr = ev.details.get("stderr", "")
