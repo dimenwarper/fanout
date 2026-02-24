@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fanout.channel import Channel
-from fanout.channels.redis import RedisChannel
+from fanout.channels.memory import MemoryChannel
 from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
 
 
@@ -12,7 +12,7 @@ class Store:
 
     def __init__(self, channel: Channel | None = None):
         if channel is None:
-            channel = RedisChannel()
+            channel = MemoryChannel()
         self.ch = channel
 
     # ── Runs ──────────────────────────────────────────────
