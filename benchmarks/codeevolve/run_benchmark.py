@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import stat
 import sys
@@ -30,6 +31,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 from rich.console import Console
 from rich.table import Table
 
+from fanout.report import generate_summary, save_record
+from fanout.store import Store
 from fanout.workflow import SampleWorkflow, LaunchWorkflow
 
 console = Console()
@@ -111,6 +114,7 @@ def run_task(
     mode: str = "sample",
     n_agents: int = 3,
     max_steps: int = 10,
+    store: Store | None = None,
 ) -> dict[str, Any]:
     """Run a single benchmark task through fanout and return results."""
     console.rule(f"[bold cyan]Task: {task_name}[/]")
@@ -145,6 +149,7 @@ def run_task(
                 verbose=verbose,
                 full=full,
                 console=console,
+                store=store,
             )
         else:
             wf = SampleWorkflow()
@@ -166,6 +171,7 @@ def run_task(
                 verbose=verbose,
                 full=full,
                 console=console,
+                store=store,
             )
 
         return {
@@ -207,10 +213,13 @@ def main():
     parser.add_argument("--mode", choices=["sample", "agent"], default="sample", help="Workflow mode (default: sample)")
     parser.add_argument("--n-agents", type=int, default=3, help="Number of agents for agent mode (default: 3)")
     parser.add_argument("--max-steps", type=int, default=10, help="Max steps per agent (default: 10)")
+    parser.add_argument("--record", action="store_true", help="Save solutions and report to runs/ directory")
+    parser.add_argument("--summary-model", default="anthropic/claude-sonnet-4-5", help="Model for LLM summary (default: anthropic/claude-sonnet-4-5)")
     args = parser.parse_args()
 
     models = args.model or ["openai/gpt-4o-mini"]
     results: list[dict[str, Any]] = []
+    shared_store = Store()
 
     for task_name in args.tasks:
         if task_name not in TASKS:
@@ -237,6 +246,7 @@ def main():
                 mode=args.mode,
                 n_agents=args.n_agents,
                 max_steps=args.max_steps,
+                store=shared_store,
             )
             results.append(result)
 
@@ -258,6 +268,14 @@ def main():
             f"{r['best_score']:.4f}", scores_str, r["run_id"][:8],
         )
     console.print(table)
+
+    if args.record and results:
+        summary = asyncio.run(
+            generate_summary(results, shared_store, model=args.summary_model)
+        )
+        console.print(f"\n[bold]Summary:[/]\n{summary}")
+        path = save_record(results, shared_store, BENCHMARK_DIR / "runs", summary=summary)
+        console.print(f"\n[dim]Saved to {path}[/]")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,131 @@
+"""Post-run reporting: LLM summary generation and record saving."""
+
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from fanout.solution_format import extract_solution
+from fanout.store import Store
+
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+async def generate_summary(
+    results: list[dict[str, Any]],
+    store: Store,
+    model: str = "anthropic/claude-sonnet-4-5",
+    top_k: int = 3,
+    api_key: str | None = None,
+) -> str:
+    """Call LLM to summarize what made top solutions successful."""
+    api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        return "(skipped summary — OPENROUTER_API_KEY not set)"
+
+    # Build context from top solutions across all tasks
+    sections: list[str] = []
+    for r in results:
+        run_id = r["run_id"]
+        task = r.get("task", run_id)
+        strategy = r.get("strategy", "unknown")
+        scored = store.get_solutions_with_scores(run_id)
+        top = scored[:top_k]
+        if not top:
+            continue
+
+        lines = [f"[Task: {task}, Strategy: {strategy}]"]
+        for i, sw in enumerate(top, 1):
+            code = extract_solution(sw.solution.output)
+            # Truncate very long solutions to keep prompt manageable
+            if len(code) > 3000:
+                code = code[:3000] + "\n... (truncated)"
+            lines.append(
+                f"Solution {i} (score={sw.aggregate_score:.4f}, model={sw.solution.model}):\n{code}"
+            )
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return "(no solutions to summarize)"
+
+    prompt = (
+        "You are analyzing solutions from a code optimization benchmark.\n\n"
+        "For each task below, I'll show the top solutions with their scores.\n"
+        "Summarize:\n"
+        "- What patterns or techniques appear in winning solutions\n"
+        "- Key differences between high and low scoring solutions\n"
+        "- Actionable insights for improving future runs\n\n"
+        + "\n\n".join(sections)
+    )
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens": 2048,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+def save_record(
+    results: list[dict[str, Any]],
+    store: Store,
+    output_dir: Path,
+    summary: str | None = None,
+    top_k: int = 3,
+    cli_args: dict[str, Any] | None = None,
+) -> Path:
+    """Save solutions and report to a run directory.
+
+    Returns the path to the created directory.
+    """
+    # Use first run_id as directory name
+    run_id = results[0]["run_id"] if results else "unknown"
+    run_dir = output_dir / run_id[:8]
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # manifest.json
+    manifest = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "tasks": [r.get("task") for r in results],
+        "strategies": list({r.get("strategy") for r in results}),
+        "run_ids": [r["run_id"] for r in results],
+    }
+    if cli_args:
+        manifest["cli_args"] = cli_args
+    (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+    # results.json
+    (run_dir / "results.json").write_text(json.dumps(results, indent=2))
+
+    # solutions/
+    sol_dir = run_dir / "solutions"
+    sol_dir.mkdir(exist_ok=True)
+    for r in results:
+        run_id = r["run_id"]
+        task = r.get("task", "task")
+        scored = store.get_solutions_with_scores(run_id)
+        for i, sw in enumerate(scored[:top_k], 1):
+            code = extract_solution(sw.solution.output)
+            ext = ".lean" if "lean" in sw.solution.output.lower() else ".py"
+            (sol_dir / f"{task}_{i}{ext}").write_text(code)
+
+    # summary.md
+    if summary:
+        (run_dir / "summary.md").write_text(summary)
+
+    return run_dir

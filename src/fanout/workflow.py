@@ -87,6 +87,7 @@ class WorkflowResult:
     run_id: str
     best_score: float
     round_scores: list[float]
+    store: Store | None = None
 
 
 # ── Built-in steps ───────────────────────────────────────
@@ -303,6 +304,7 @@ class Workflow:
             run_id=ctx.run.id,
             best_score=ctx.best_score,
             round_scores=ctx.round_scores,
+            store=ctx.store,
         )
 
 
@@ -358,6 +360,7 @@ class SampleWorkflow(Workflow):
             run_id=ctx.run.id,
             best_score=ctx.best_score,
             round_scores=ctx.round_scores,
+            store=ctx.store,
         )
 
     def _execute(self, ctx: WorkflowContext) -> None:
@@ -441,6 +444,7 @@ class LaunchWorkflow(Workflow):
             run_id=ctx.run.id,
             best_score=ctx.best_score,
             round_scores=ctx.round_scores,
+            store=ctx.store,
         )
 
     def _execute(self, ctx: WorkflowContext) -> None:
