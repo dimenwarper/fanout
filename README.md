@@ -349,4 +349,4 @@ src/fanout/
     └── island.py          # Island model with migration
 ```
 
-Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs).
+Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs). A SQLite channel backend is also available for environments without Redis — pass a `SqliteChannel` to `Store()` to use it.
