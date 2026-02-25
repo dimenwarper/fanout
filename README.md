@@ -22,35 +22,9 @@ There are two kinds of workflows: **Sample** and **Launch**. Both fan out work a
 
 The sample workflow is a multi-round evolutionary loop. Each round samples solutions from models, evaluates them, selects the best, and uses those to seed the next generation. This is the classic map-reduce pattern applied to LLM outputs.
 
-```mermaid
-flowchart TD
-    P["Prompt"] --> F["Fan Out"]
-
-    subgraph MAP ["Map — sample in parallel"]
-        F --> M1["Model A (sample 1)"]
-        F --> M2["Model A (sample 2)"]
-        F --> M3["Model B (sample 1)"]
-        F --> M4["Model C (sample 1)"]
-    end
-
-    M1 --> S["Solutions Pool"]
-    M2 --> S
-    M3 --> S
-    M4 --> S
-
-    subgraph REDUCE ["Reduce — evaluate & select"]
-        S --> E["Evaluators (latency, cost, accuracy, script)"]
-        E --> SC["Scored Solutions"]
-        SC --> SEL["Selection Strategy (top-k, weighted, map-elites, island, rsa, alphaevolve)"]
-    end
-
-    SEL --> |"Round N+1 selected solutions seed next generation"| F
-
-    SEL --> W["Winner(s)"]
-
-    style MAP fill:#1a1a2e,stroke:#16213e,color:#e0e0e0
-    style REDUCE fill:#0f3460,stroke:#16213e,color:#e0e0e0
-```
+<p align="center">
+  <img src="assets/sampling_workflow.png" alt="Sample workflow diagram" width="700">
+</p>
 
 **Each round is one map-reduce cycle:**
 
@@ -63,34 +37,9 @@ flowchart TD
 
 The launch workflow takes a different approach: instead of externally orchestrating sample-evaluate-select rounds, it spawns concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a single shot.
 
-```mermaid
-flowchart TD
-    P["Prompt"] --> L["Launch"]
-
-    subgraph AGENTS ["Concurrent Agents"]
-        L --> A1["Agent 1 (Model A)"]
-        L --> A2["Agent 2 (Model B)"]
-        L --> A3["Agent 3 (Model A)"]
-
-        A1 --> |"read / write / eval loop"| A1
-        A2 --> |"read / write / eval loop"| A2
-        A3 --> |"read / write / eval loop"| A3
-    end
-
-    A1 --> SP["Shared Solutions Pool"]
-    A2 --> SP
-    A3 --> SP
-
-    A1 -.-> |"read others' solutions"| SP
-    A2 -.-> |"read others' solutions"| SP
-    A3 -.-> |"read others' solutions"| SP
-
-    SP --> SEL["Select (top-k)"]
-    SEL --> W["Winner(s)"]
-
-    style AGENTS fill:#1a1a2e,stroke:#16213e,color:#e0e0e0
-    style SP fill:#0f3460,stroke:#16213e,color:#e0e0e0
-```
+<p align="center">
+  <img src="assets/launch_workflow.png" alt="Launch workflow diagram" width="700">
+</p>
 
 Each agent runs for up to `--max-steps` iterations, using tools to read the task, submit solutions, run evaluations, and inspect other agents' work. Agents share a solution pool so they can learn from each other in real time.
 
@@ -103,20 +52,6 @@ uv run fanout launch "Write a fast matrix multiply" \
 Use `--mode agent` in benchmark runners to switch from the sample workflow to the launch workflow.
 
 ## Install
-
-### Prerequisites
-
-Fanout uses **Redis** for persistent storage. Install the Redis server:
-
-```bash
-# macOS
-brew install redis
-
-# Ubuntu / Debian
-sudo apt install redis-server
-```
-
-When you run fanout, it will automatically connect to Redis on `localhost:6379`, starting the server if it finds `redis-server` on your PATH. If Redis is unavailable, it falls back to an ephemeral in-memory store (data is lost when the process exits).
 
 ### Local development
 
@@ -373,7 +308,7 @@ src/fanout/
 ├── agent_tools.py         # smolagents tools (read_prompt, write_solution, run_eval, etc.)
 ├── evaluate.py            # Evaluation orchestration (supports parallel via -p)
 ├── select.py              # Selection orchestration
-├── store.py               # Storage facade (Redis → in-memory fallback)
+├── store.py               # Storage facade (SQLite)
 ├── model_sets.py           # Weighted model set definitions
 ├── db/
 │   └── models.py          # Pydantic data models (Run, Solution, Evaluation)
@@ -400,4 +335,4 @@ src/fanout/
     └── island.py          # Island model with migration
 ```
 
-Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs).
+Data is stored in a local SQLite database (`.fanout/fanout.db`). Use `fanout store` to list and inspect runs.
