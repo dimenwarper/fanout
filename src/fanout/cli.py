@@ -329,14 +329,12 @@ def run_loop(
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show per-solution details with syntax-highlighted previews")] = False,
     full: Annotated[bool, typer.Option("--full", help="Show full solutions (not truncated)")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY")] = None,
+    mode: Annotated[str, typer.Option("--mode", help="Workflow mode: sample or agent")] = "sample",
+    n_agents: Annotated[int, typer.Option("--n-agents", help="Number of agents for agent mode")] = 3,
+    max_steps: Annotated[int, typer.Option("--max-steps", help="Max steps per agent")] = 10,
 ) -> None:
-    """Full evolutionary loop: sample → evaluate → select × N rounds."""
-    from collections import Counter
-
-    from fanout.evaluate import evaluate_solutions
-    from fanout.sample import sample as do_sample
-    from fanout.select import select_solutions
-    from fanout.strategies.base import get_strategy
+    """Full workflow: sample → evaluate → select × N rounds, or agent mode."""
+    from fanout.workflow import SampleWorkflow, LaunchWorkflow
 
     store = _get_store()
     models = model or ["openai/gpt-4o-mini"]
@@ -347,108 +345,89 @@ def run_loop(
         if "script" not in evaluator_names:
             evaluator_names.append("script")
 
-    run = Run(prompt=prompt, total_rounds=rounds)
-    store.save_run(run)
-    if model_set:
-        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), model set: {model_set} (n={n_samples})")
-    else:
-        console.print(f"[bold green]Run {run.id}[/] — {rounds} round(s), {len(models)} model(s), n={n_samples}")
-
-    config = SamplingConfig(
-        models=models, temperature=temperature,
-        max_tokens=max_tokens,
-        model_set=model_set, n_samples=n_samples,
-        solution_format=solution_format,
-    )
-    context: dict[str, Any] | None = {}
+    eval_context: dict[str, Any] = {}
     if reference:
-        context["reference"] = reference
+        eval_context["reference"] = reference
     if eval_script:
-        context["eval_script"] = eval_script
-        context["materializer"] = materializer
-        context["file_extension"] = file_ext
-    context["eval_timeout"] = eval_timeout
-    context = context or None
-    parent_ids: list[str] | None = None
-    strategy_instance = get_strategy(strategy)
-    current_prompt: str | list[str] = prompt
-    best_score = 0.0
+        eval_context["eval_script"] = eval_script
+        eval_context["materializer"] = materializer
+        eval_context["file_extension"] = file_ext
+    eval_context["eval_timeout"] = eval_timeout
+
     lexer = _ext_to_lexer(file_ext)
 
-    if full:
-        from fanout.solution_format import get_format as _get_format
-        _fmt = _get_format(solution_format)
-        if _fmt.system_prompt:
-            console.print(f"\n[bold]System prompt:[/]")
-            console.print(Syntax(_fmt.system_prompt, "text", theme="monokai", padding=(0, 2)))
-        if _fmt.prompt_suffix:
-            console.print(f"\n[bold]Prompt suffix (appended to all user prompts):[/]")
-            console.print(Syntax(_fmt.prompt_suffix, "text", theme="monokai", padding=(0, 2)))
+    if mode == "agent":
+        wf = LaunchWorkflow()
+        console.print(f"[bold green]Agent mode[/] — {n_agents} agent(s), max {max_steps} steps, strategy: {strategy}")
+        result = wf.run(
+            prompt=prompt,
+            models=models,
+            model_set=model_set,
+            n_samples=n_samples,
+            n_agents=n_agents,
+            max_steps=max_steps,
+            strategy=strategy,
+            k=k,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            solution_format=solution_format,
+            eval_script=eval_script,
+            eval_context=eval_context or None,
+            evaluator_names=evaluator_names,
+            api_key=api_key,
+            store=store,
+            verbose=verbose,
+            full=full,
+            console=console,
+            syntax_lang=lexer,
+        )
+    else:
+        wf = SampleWorkflow()
+        if model_set:
+            console.print(f"[bold green]Sample mode[/] — {rounds} round(s), model set: {model_set} (n={n_samples})")
+        else:
+            console.print(f"[bold green]Sample mode[/] — {rounds} round(s), {len(models)} model(s), n={n_samples}")
+        result = wf.run(
+            prompt=prompt,
+            models=models,
+            model_set=model_set,
+            n_samples=n_samples,
+            rounds=rounds,
+            strategy=strategy,
+            k=k,
+            k_agg=k_agg,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            solution_format=solution_format,
+            eval_script=eval_script,
+            eval_context=eval_context or None,
+            evaluator_names=evaluator_names,
+            eval_concurrency=eval_concurrency,
+            api_key=api_key,
+            store=store,
+            verbose=verbose,
+            full=full,
+            console=console,
+            syntax_lang=lexer,
+        )
 
-    for rnd in range(rounds):
-        console.rule(f"[bold]Round {rnd + 1}/{rounds}[/]")
-
-        if full:
-            if isinstance(current_prompt, list):
-                for pi, p in enumerate(current_prompt):
-                    console.print(f"\n[bold]Prompt {pi+1}/{len(current_prompt)} ({len(p)} chars):[/]")
-                    console.print(Syntax(p, "text", theme="monokai", padding=(0, 2)))
-            else:
-                console.print(f"\n[bold]Prompt ({len(current_prompt)} chars):[/]")
-                console.print(Syntax(current_prompt, "text", theme="monokai", padding=(0, 2)))
-            console.print()
-
-        # Sample
-        solutions = do_sample(current_prompt, config, store, run.id, rnd, parent_ids, api_key)
-
-        model_counts = Counter(s.model for s in solutions)
-        models_str = ", ".join(f"{m}(x{c})" if c > 1 else m for m, c in model_counts.items())
-        console.print(f"  Sampled {len(solutions)} solutions [dim]\\[{models_str}][/]")
-
-        # Evaluate
-        evals = evaluate_solutions(solutions, evaluator_names, store, context, concurrency=eval_concurrency)
-        console.print(f"  Ran {len(evals)} evaluations")
-
-        # Select
-        selected = select_solutions(run.id, rnd, strategy, store, k=k)
-        top_score = selected[0].aggregate_score if selected else 0.0
-        best_score = max(best_score, top_score)
-        console.print(f"  Selected {len(selected)} ({strategy}) top={top_score:.4f} best={best_score:.4f}")
-
-        # Show top
-        for i, s in enumerate(selected[:3], 1):
-            console.print(f"  #{i} [{s.solution.model}] score={s.aggregate_score:.3f}")
-
-        if full:
-            for i, sol in enumerate(solutions):
-                ev = evals[i] if i < len(evals) else None
-                score_str = f" score={ev.score:.4f}" if ev else ""
-                exit_str = f" exit={ev.details.get('exit_code', '?')}" if ev else ""
-                console.print(f"    [dim]Solution {i+1} [{sol.model}]{score_str}{exit_str}[/]")
-                preview = sol.output
-                console.print(Syntax(preview, lexer, theme="monokai", line_numbers=True, padding=(0, 2)))
-                if ev:
-                    stderr = ev.details.get("stderr", "")
-                    stdout = ev.details.get("stdout", "")
-                    if stderr:
-                        console.print(f"      [dim]stderr: {stderr}[/]")
-                    if ev.score == 0.0 and stdout:
-                        console.print(f"      [dim]stdout: {stdout}[/]")
-
-        store.update_run_round(run.id, rnd + 1)
-        parent_ids = [s.solution.id for s in selected]
-
-        # Build prompts for next round
-        if rnd < rounds - 1:
-            current_prompt = strategy_instance.build_prompts(
-                original_prompt=prompt,
-                selected=selected,
-                round_num=rnd,
-                n_samples=config.n_samples,
-                k_agg=k_agg,
+    # Show final results
+    scored = store.get_solutions_with_scores(result.run_id)
+    if scored:
+        table = Table(title=f"Top solutions (run {result.run_id[:8]})")
+        table.add_column("Rank", justify="right")
+        table.add_column("Model")
+        table.add_column("Score", justify="right", style="bold green")
+        table.add_column("Output (preview)")
+        for i, s in enumerate(scored[:5], 1):
+            extracted = extract_solution(s.solution.output)
+            table.add_row(
+                str(i), s.solution.model, f"{s.aggregate_score:.4f}",
+                extracted[:80] + ("..." if len(extracted) > 80 else ""),
             )
+        console.print(table)
 
-    console.print(f"\n[bold green]Done.[/] Run ID: {run.id} best={best_score:.4f}")
+    console.print(f"\n[bold green]Done.[/] Run ID: {result.run_id} best={result.best_score:.4f}")
 
 
 # ── store (inspect) ──────────────────────────────────────
