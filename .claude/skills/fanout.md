@@ -134,4 +134,4 @@ uv run fanout list-model-sets
 
 ## Data
 
-Results are stored in a local SQLite database (`.fanout/fanout.db`). Use `fanout store` to list and inspect runs.
+Results are stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an ephemeral in-memory store is used. Use `fanout store` to list and inspect runs.
