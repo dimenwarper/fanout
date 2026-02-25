@@ -178,9 +178,17 @@ def evolve_step(ctx: WorkflowContext) -> None:
 
 def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10) -> None:
     """Launch concurrent agents that iteratively produce and improve solutions."""
+    if ctx.config.model_set:
+        from fanout.model_sets import get_model_set, pick_models
+
+        ms = get_model_set(ctx.config.model_set)
+        models = pick_models(ms, n_agents)
+    else:
+        models = ctx.config.models
+
     ctx.solutions = do_launch(
         prompt=ctx.prompt,
-        models=ctx.config.models,
+        models=models,
         store=ctx.store,
         run_id=ctx.run.id,
         n_agents=n_agents,
