@@ -12,7 +12,7 @@ Run the fanout CLI to sample multiple LLMs, evaluate their outputs, and iterativ
 
 Dispatch to the appropriate subcommand based on user intent:
 
-### Full evolutionary run
+### Full evolutionary run (sample mode)
 ```bash
 # Explicit models
 uv run fanout run "YOUR PROMPT" \
@@ -27,6 +27,24 @@ uv run fanout run "YOUR PROMPT" \
 
 # Verbose output with syntax-highlighted previews
 uv run fanout run "YOUR PROMPT" -m openai/gpt-4o-mini -n 5 -r 3 -v
+
+# Full untruncated solutions
+uv run fanout run "YOUR PROMPT" -m openai/gpt-4o-mini -n 5 -r 3 --full
+```
+
+### Agent mode
+```bash
+# Launch concurrent agents that iteratively improve solutions
+uv run fanout run "YOUR PROMPT" --mode agent \
+  --n-agents 5 --max-steps 10 \
+  --eval-script ./eval.sh -s top-k -k 3
+
+# Agent mode with model set
+uv run fanout run "YOUR PROMPT" --mode agent \
+  -M coding --n-agents 20 --max-steps 10 -k 10
+
+# Atomic launch (without selection)
+uv run fanout launch "YOUR PROMPT" -n 3 --max-steps 10 --eval-script ./eval.sh -v
 ```
 
 ### Sample only
@@ -66,10 +84,15 @@ uv run fanout list-model-sets
 - `-m/--model`: Model to sample (repeatable). Default: `openai/gpt-4o-mini`
 - `-M/--model-set`: Named model set for weighted random sampling. Available: `coding`, `diverse`, `large`, `math-proving`, `small`
 
+### Workflow mode
+- `--mode`: Workflow mode — `sample` (default) or `agent`
+- `--n-agents`: Number of concurrent agents for agent mode. Default: `3`
+- `--max-steps`: Max iterations per agent. Default: `10`
+
 ### Sampling
-- `-n/--n-samples`: Total samples per round. Distributed round-robin across models when using `-m`. Default: `5`
+- `-n/--n-samples`: Total samples per round (sample mode). Default: `5`
 - `--temperature`: Sampling temperature. Default: `0.7`
-- `--max-tokens`: Max tokens per response. Default: `2048`
+- `--max-tokens`: Max tokens per response. Default: `16384`
 
 ### Evaluation
 - `-e/--evaluator`: Evaluator to apply (repeatable). Default: `latency`, `cost`
@@ -83,6 +106,7 @@ uv run fanout list-model-sets
   - `stdin` — pipes via stdin
   - `worktree` — applies as a unified diff in a git worktree
 - `--file-ext`: File extension for file materializer. Default: `.py`
+- `--eval-timeout`: Timeout per evaluation in seconds. Default: `60`
 - `--reference`: Reference answer for the accuracy evaluator
 
 ### Strategy & selection
@@ -95,19 +119,19 @@ uv run fanout list-model-sets
   - `map-elites` — best solution per behavioral dimension cell
 - `-r/--rounds`: Number of evolutionary rounds. Default: `1`
 - `--k`: Selection size. Default: `3`
-- `--k-agg`: Number of parent solutions per aggregation prompt (RSA/alphaevolve). Default: `3`
+- `--k-agg`: Number of parent solutions per aggregation prompt (RSA/alphaevolve). Default: `6`
 
 ### Execution
-- `--eval-concurrency`: Max parallel evaluations. Default: `1`. Increase on beefy boxes to speed up script evals.
+- `-p/--eval-concurrency`: Max parallel evaluations. Default: `1`. Increase to speed up script evals.
 
 ### Output
 - `-v/--verbose`: Show per-solution details with syntax-highlighted code previews
+- `--full`: Show full untruncated solutions
 
 ## Environment
 
 - `OPENROUTER_API_KEY`: Required. Your OpenRouter API key.
-- **Redis**: Install `redis-server` (`brew install redis` on macOS, `apt install redis-server` on Linux). Fanout auto-starts it if found on PATH. Falls back to in-memory storage if unavailable.
 
 ## Data
 
-Results are stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an ephemeral in-memory store is used.
+Results are stored in a local SQLite database (`.fanout/fanout.db`). Use `fanout store` to list and inspect runs.
