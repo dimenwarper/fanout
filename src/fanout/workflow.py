@@ -27,7 +27,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.table import Table
 
 from fanout.db.models import Evaluation, Memory, Run, Solution, SolutionWithScores
 from fanout.evaluate import evaluate_solutions
@@ -165,6 +167,44 @@ def select_step(ctx: WorkflowContext) -> None:
                     ctx.console.print(f"      [dim]stdout: {stdout}[/]")
 
 
+_MEMORY_TYPE_STYLE: dict[str, str] = {
+    "observation": "cyan",
+    "hypothesis":  "yellow",
+    "learning":    "green",
+    "strategy":    "magenta",
+}
+
+
+def _print_memory_table(ctx: WorkflowContext) -> None:
+    """Render the current memory bank as a Rich table to ctx.console."""
+    if not (ctx.use_memory and ctx.console):
+        return
+    memories = ctx.store.get_memories_for_run(ctx.run.id)
+    if not memories:
+        return
+
+    table = Table(show_header=True, header_style="bold", expand=True, box=None)
+    table.add_column("Type",    style="bold", width=12)
+    table.add_column("Agent",   style="dim",  width=22)
+    table.add_column("Score",   justify="right", width=7)
+    table.add_column("Content")
+
+    for mem in memories:
+        style = _MEMORY_TYPE_STYLE.get(mem.memory_type, "white")
+        score_str = f"{mem.score:.3f}" if mem.score is not None else "—"
+        content = mem.content if len(mem.content) <= 120 else mem.content[:117] + "..."
+        table.add_row(
+            f"[{style}]{mem.memory_type}[/]",
+            mem.agent_id,
+            score_str,
+            content,
+        )
+
+    ctx.console.print(
+        Panel(table, title=f"[bold]Memory Bank[/] ({len(memories)} entries)", border_style="dim blue")
+    )
+
+
 def memory_step(ctx: WorkflowContext) -> None:
     """Auto-record round learnings into the memory bank (sample workflow).
 
@@ -216,6 +256,8 @@ def memory_step(ctx: WorkflowContext) -> None:
                 solution_id=worst.solution.id,
                 score=worst.aggregate_score,
             ))
+
+    _print_memory_table(ctx)
 
 
 def evolve_step(ctx: WorkflowContext) -> None:
@@ -277,6 +319,7 @@ def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10)
     )
     if ctx.console:
         ctx.console.print(f"[dim]launched {n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
+    _print_memory_table(ctx)
 
 
 # ── Workflow base class ──────────────────────────────────
