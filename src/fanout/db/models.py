@@ -54,6 +54,28 @@ class Evaluation(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Memory(BaseModel):
+    """A shared memory entry written by an agent or the workflow itself.
+
+    Agents use memories to record observations about the task, hypotheses
+    they plan to try, learnings from evaluating solutions, and high-level
+    strategies — so other agents (or future rounds) can build on them.
+    """
+
+    id: str = Field(default_factory=_new_id)
+    run_id: str
+    # "agent-0", "agent-1" … for launch workflow; "workflow/round-N" for sample workflow
+    agent_id: str
+    # One of: observation | hypothesis | learning | strategy
+    memory_type: str
+    content: str
+    # Optional reference back to a specific solution
+    solution_id: str | None = None
+    # Aggregate score of the linked solution at write time, if available
+    score: float | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class SolutionWithScores(BaseModel):
     """Read-side composite: solution + all evaluation scores."""
 

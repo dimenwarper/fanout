@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fanout.channel import Channel
-from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
+from fanout.db.models import Evaluation, Memory, Run, Solution, SolutionWithScores
 
 
 def _default_channel() -> Channel:
@@ -111,6 +111,24 @@ class Store:
             Evaluation(**d)
             for d in self.ch.list("evaluations", solution_id=solution_id)
         ]
+
+    # ── Memories ──────────────────────────────────────────
+
+    def save_memory(self, mem: Memory) -> Memory:
+        self.ch.put(
+            "memories", mem.id, mem.model_dump(mode="json"),
+            run_id=mem.run_id,
+            memory_type=mem.memory_type,
+        )
+        return mem
+
+    def get_memories_for_run(
+        self, run_id: str, memory_type: str | None = None
+    ) -> list[Memory]:
+        filters: dict[str, str] = {"run_id": run_id}
+        if memory_type:
+            filters["memory_type"] = memory_type
+        return [Memory(**d) for d in self.ch.list("memories", **filters)]
 
     # ── Composites ────────────────────────────────────────
 

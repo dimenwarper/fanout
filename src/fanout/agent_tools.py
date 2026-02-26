@@ -7,7 +7,7 @@ from typing import Any
 
 from smolagents import Tool
 
-from fanout.db.models import Solution
+from fanout.db.models import Memory, Solution
 from fanout.solution_format import extract_solution
 from fanout.store import Store
 
@@ -155,6 +155,118 @@ class RunEvalTool(Tool):
         if stdout:
             parts.append(f"Stdout:\n{stdout}")
         return "\n".join(parts)
+
+
+class WriteMemoryTool(Tool):
+    """Write an observation, hypothesis, learning, or strategy to the shared memory bank."""
+
+    name = "write_memory"
+    description = (
+        "Write a memory to the shared memory bank so other agents can learn from it. "
+        "Use 'observation' for task insights, 'hypothesis' for ideas you plan to try, "
+        "'learning' for outcomes after evaluating a solution (what worked or failed and why), "
+        "and 'strategy' for high-level approaches worth sharing."
+    )
+    inputs = {
+        "memory_type": {
+            "type": "string",
+            "description": (
+                "Type of memory: 'observation' (task insight), 'hypothesis' (idea to try), "
+                "'learning' (outcome from testing), or 'strategy' (high-level approach)."
+            ),
+        },
+        "content": {
+            "type": "string",
+            "description": "The memory content. Be specific and actionable.",
+        },
+        "solution_id": {
+            "type": "string",
+            "description": "Optional ID of the solution this memory relates to.",
+            "nullable": True,
+        },
+    }
+    output_type = "string"
+
+    _VALID_TYPES = {"observation", "hypothesis", "learning", "strategy"}
+
+    def __init__(self, store: Store, run_id: str, agent_id: str, **kwargs: Any):
+        super().__init__(**kwargs)
+        self._store = store
+        self._run_id = run_id
+        self._agent_id = agent_id
+
+    def forward(
+        self,
+        memory_type: str,
+        content: str,
+        solution_id: str | None = None,
+    ) -> str:
+        if memory_type not in self._VALID_TYPES:
+            return f"Error: memory_type must be one of {sorted(self._VALID_TYPES)}"
+
+        # Look up the solution's current aggregate score if an ID was provided
+        score: float | None = None
+        if solution_id:
+            for s in self._store.get_solutions_with_scores(self._run_id):
+                if s.solution.id == solution_id:
+                    score = s.aggregate_score
+                    break
+
+        mem = Memory(
+            run_id=self._run_id,
+            agent_id=self._agent_id,
+            memory_type=memory_type,
+            content=content,
+            solution_id=solution_id,
+            score=score,
+        )
+        self._store.save_memory(mem)
+        preview = content[:80] + ("..." if len(content) > 80 else "")
+        return f"Memory saved [{memory_type}]: {preview}"
+
+
+class ReadMemoriesTool(Tool):
+    """Read shared memories from the memory bank."""
+
+    name = "read_memories"
+    description = (
+        "Read shared memories from all agents — observations, hypotheses, learnings, "
+        "and strategies. Call this before trying a new approach to build on what "
+        "others have already discovered."
+    )
+    inputs = {
+        "memory_type": {
+            "type": "string",
+            "description": (
+                "Filter by type ('observation', 'hypothesis', 'learning', 'strategy'), "
+                "or omit / pass 'all' to read everything."
+            ),
+            "nullable": True,
+        },
+    }
+    output_type = "string"
+
+    def __init__(self, store: Store, run_id: str, **kwargs: Any):
+        super().__init__(**kwargs)
+        self._store = store
+        self._run_id = run_id
+
+    def forward(self, memory_type: str | None = None) -> str:
+        mtype = None if (not memory_type or memory_type == "all") else memory_type
+        memories = self._store.get_memories_for_run(self._run_id, memory_type=mtype)
+
+        if not memories:
+            return "The memory bank is empty — you are the first to record learnings."
+
+        lines = [f"=== Shared Memory Bank ({len(memories)} entr{'y' if len(memories)==1 else 'ies'}) ===\n"]
+        for mem in memories:
+            score_str = f"  score={mem.score:.3f}" if mem.score is not None else ""
+            sol_str = f"  sol={mem.solution_id}" if mem.solution_id else ""
+            lines.append(
+                f"[{mem.memory_type.upper()}] {mem.agent_id}{score_str}{sol_str}\n"
+                f"  {mem.content}\n"
+            )
+        return "\n".join(lines)
 
 
 class ReadPromptTool(Tool):

@@ -29,7 +29,7 @@ from typing import Any, Callable
 from rich.console import Console
 from rich.syntax import Syntax
 
-from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
+from fanout.db.models import Evaluation, Memory, Run, Solution, SolutionWithScores
 from fanout.evaluate import evaluate_solutions
 from fanout.launch import launch as do_launch
 from fanout.providers.openrouter import SamplingConfig
@@ -58,6 +58,10 @@ class WorkflowContext:
     eval_concurrency: int
     rounds: int
     api_key: str | None = None
+    # When True, agents share learnings via the memory bank (launch workflow),
+    # and the sample workflow auto-records round learnings + injects them into
+    # the next round's prompt via evolve_step.
+    use_memory: bool = False
 
     # ── Logging ──────────────────────────────────────────
     console: Console | None = None
@@ -161,19 +165,89 @@ def select_step(ctx: WorkflowContext) -> None:
                     ctx.console.print(f"      [dim]stdout: {stdout}[/]")
 
 
+def memory_step(ctx: WorkflowContext) -> None:
+    """Auto-record round learnings into the memory bank (sample workflow).
+
+    Writes one ``learning`` memory for the best solution and, when there is a
+    meaningful score gap, one for the weakest selected solution.  No LLM call
+    is made — learnings are assembled from evaluation metadata already in the
+    store.  These memories are injected into the next round's prompt by
+    ``evolve_step``.
+    """
+    if not ctx.selected:
+        return
+
+    best = ctx.selected[0]
+    extracted = extract_solution(best.solution.output)
+    preview = extracted[:300] + ("..." if len(extracted) > 300 else "")
+
+    ctx.store.save_memory(Memory(
+        run_id=ctx.run.id,
+        agent_id=f"workflow/round-{ctx.round_num}",
+        memory_type="learning",
+        content=(
+            f"Round {ctx.round_num} best (score={best.aggregate_score:.3f}, "
+            f"model={best.solution.model}): {preview}"
+        ),
+        solution_id=best.solution.id,
+        score=best.aggregate_score,
+    ))
+
+    if len(ctx.selected) > 1:
+        worst = ctx.selected[-1]
+        gap = best.aggregate_score - worst.aggregate_score
+        if gap > 0.1:
+            # Include any stderr hint from the worst solution's evaluations
+            error_hint = ""
+            for ev in worst.evaluations:
+                stderr = ev.details.get("stderr", "")
+                if stderr:
+                    error_hint = f"  Errors: {stderr[:120]}"
+                    break
+            ctx.store.save_memory(Memory(
+                run_id=ctx.run.id,
+                agent_id=f"workflow/round-{ctx.round_num}",
+                memory_type="learning",
+                content=(
+                    f"Round {ctx.round_num} weakest selected "
+                    f"(score={worst.aggregate_score:.3f}, model={worst.solution.model})."
+                    f"{error_hint}"
+                ),
+                solution_id=worst.solution.id,
+                score=worst.aggregate_score,
+            ))
+
+
 def evolve_step(ctx: WorkflowContext) -> None:
     """Build prompts for the next round and advance the run."""
     ctx.store.update_run_round(ctx.run.id, ctx.round_num + 1)
     ctx.parent_ids = [s.solution.id for s in ctx.selected]
 
     if ctx.round_num < ctx.rounds - 1:
-        ctx.current_prompt = ctx.strategy_instance.build_prompts(
+        prompt = ctx.strategy_instance.build_prompts(
             original_prompt=ctx.prompt,
             selected=ctx.selected,
             round_num=ctx.round_num,
             n_samples=ctx.config.n_samples,
             k_agg=ctx.k_agg,
         )
+
+        # Prepend accumulated memories when the memory bank is enabled
+        if ctx.use_memory:
+            memories = ctx.store.get_memories_for_run(ctx.run.id)
+            if memories:
+                lines = ["=== Shared Learnings from Previous Rounds ==="]
+                for mem in memories:
+                    score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
+                    lines.append(f"[{mem.memory_type}]{score_str}: {mem.content}")
+                lines.append("=== End of Learnings ===\n")
+                prefix = "\n".join(lines) + "\n"
+                if isinstance(prompt, list):
+                    prompt = [prefix + p for p in prompt]
+                else:
+                    prompt = prefix + prompt
+
+        ctx.current_prompt = prompt
 
 
 def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10) -> None:
@@ -199,6 +273,7 @@ def launch_step(ctx: WorkflowContext, *, n_agents: int = 3, max_steps: int = 10)
         verbose=ctx.verbose,
         api_key=ctx.api_key,
         console=ctx.console,
+        use_memory=ctx.use_memory,
     )
     if ctx.console:
         ctx.console.print(f"[dim]launched {n_agents} agent(s), {len(ctx.solutions)} solution(s)[/]")
@@ -234,6 +309,7 @@ class Workflow:
         k: int = 3,
         k_agg: int = 6,
         rounds: int = 1,
+        use_memory: bool = False,
     ) -> WorkflowContext:
         """Build shared context — called by subclass ``run()`` methods."""
         if store is None:
@@ -282,6 +358,7 @@ class Workflow:
             verbose=verbose,
             full=full,
             syntax_lang=syntax_lang,
+            use_memory=use_memory,
         )
 
     def _log_prompt_preview(self, ctx: WorkflowContext, solution_format: str = "code") -> None:
@@ -349,6 +426,7 @@ class SampleWorkflow(Workflow):
         full: bool = False,
         console: Console | None = None,
         syntax_lang: str = "python",
+        use_memory: bool = False,
     ) -> WorkflowResult:
         """Execute the sample workflow loop and return results."""
         ctx = self._build_context(
@@ -360,7 +438,7 @@ class SampleWorkflow(Workflow):
             eval_concurrency=eval_concurrency, api_key=api_key,
             store=store, verbose=verbose, full=full, console=console,
             syntax_lang=syntax_lang, strategy=strategy, k=k, k_agg=k_agg,
-            rounds=rounds,
+            rounds=rounds, use_memory=use_memory,
         )
         self._log_prompt_preview(ctx, solution_format)
         self._execute(ctx)
@@ -372,8 +450,12 @@ class SampleWorkflow(Workflow):
         )
 
     def _execute(self, ctx: WorkflowContext) -> None:
+        # memory_step is inserted after select_step when the memory bank is on,
+        # so learnings from each round are stored before evolve_step builds the
+        # next prompt (which prepends those memories as context).
         steps: list[StepFn] = [
             sample_step, evaluate_step, select_step,
+            *([memory_step] if ctx.use_memory else []),
             *self.extra_steps,
             evolve_step,
         ]
@@ -432,6 +514,7 @@ class LaunchWorkflow(Workflow):
         full: bool = False,
         console: Console | None = None,
         syntax_lang: str = "python",
+        use_memory: bool = False,
     ) -> WorkflowResult:
         """Execute the launch workflow and return results."""
         self._n_agents = n_agents
@@ -444,7 +527,7 @@ class LaunchWorkflow(Workflow):
             eval_context=eval_context, evaluator_names=evaluator_names,
             api_key=api_key, store=store, verbose=verbose, full=full,
             console=console, syntax_lang=syntax_lang, strategy=strategy,
-            k=k, rounds=1,
+            k=k, rounds=1, use_memory=use_memory,
         )
         self._log_prompt_preview(ctx, solution_format)
         self._execute(ctx)

@@ -33,6 +33,30 @@ Follow this loop:
 Focus on producing correct, high-quality solutions. Learn from other agents' solutions and scores.
 """
 
+AGENT_SYSTEM_PROMPT_WITH_MEMORY = """\
+You are a coding agent. Your goal is to produce the best possible solution to the task.
+You have access to a shared memory bank that all agents can read and write.
+
+Use the memory bank to:
+- Record OBSERVATIONS about the task structure, constraints, or edge cases.
+- Write HYPOTHESES before trying a new approach — what you think will work and why.
+- Record LEARNINGS after evaluating a solution — what the score was, what worked or failed, and why.
+- Share STRATEGIES so other agents can build on your high-level approaches.
+
+Follow this loop:
+1. Read the task prompt using `read_prompt`.
+2. Read shared memories with `read_memories` — learn from what others have already discovered.
+3. Read existing solutions with `read_solutions` — see what has been tried and scored.
+4. If you have an insight or plan, record it as a memory with `write_memory` before coding.
+5. Write your solution using `write_solution`.
+6. If an eval script is available, evaluate your solution with `run_eval`.
+7. Record a LEARNING memory with `write_memory` — note the score and what you learned.
+8. Go back to step 2 and iterate: read memories, improve your approach, repeat.
+
+The memory bank is your shared scratchpad. Use it proactively — both to share your insights
+and to avoid repeating mistakes others have already made.
+"""
+
 
 class _AgentTracker:
     """Thread-safe tracker for agent step progress, rendered via Rich Live."""
@@ -148,23 +172,35 @@ def _run_single_agent(
     api_key: str | None,
     label: str,
     tracker: _AgentTracker | None,
+    use_memory: bool = False,
 ) -> list[Solution]:
     """Run a single smolagents ToolCallingAgent. Returns solutions it produced."""
     from smolagents import ToolCallingAgent
     from smolagents.monitoring import LogLevel
 
     from fanout.agent_tools import (
+        ReadMemoriesTool,
         ReadPromptTool,
         ReadSolutionsTool,
         RunEvalTool,
         WriteSolutionTool,
+        WriteMemoryTool,
     )
+
+    # Derive a short, stable agent ID from the label for memory authorship
+    agent_id = label.split("(")[0].strip().lower().replace(" ", "-")
 
     tools: list[Any] = [
         ReadSolutionsTool(store=store, run_id=run_id),
         WriteSolutionTool(store=store, run_id=run_id, model=model),
         ReadPromptTool(prompt=prompt),
     ]
+
+    if use_memory:
+        tools += [
+            WriteMemoryTool(store=store, run_id=run_id, agent_id=agent_id),
+            ReadMemoriesTool(store=store, run_id=run_id),
+        ]
 
     if eval_script:
         tools.append(
@@ -180,11 +216,13 @@ def _run_single_agent(
 
     step_callbacks = _make_step_callback(label, tracker) if tracker else None
 
+    system_prompt = AGENT_SYSTEM_PROMPT_WITH_MEMORY if use_memory else AGENT_SYSTEM_PROMPT
+
     agent = ToolCallingAgent(
         tools=tools,
         model=llm,
         max_steps=max_steps,
-        instructions=AGENT_SYSTEM_PROMPT,
+        instructions=system_prompt,
         verbosity_level=LogLevel.OFF,
         step_callbacks=step_callbacks,
     )
@@ -230,11 +268,17 @@ def launch(
     verbose: bool = False,
     api_key: str | None = None,
     console: Console | None = None,
+    use_memory: bool = False,
 ) -> list[Solution]:
     """Launch concurrent agents that iteratively produce solutions.
 
     Models are distributed round-robin across agents.
     Returns all solutions produced during the launch.
+
+    When ``use_memory=True`` each agent is given ``write_memory`` and
+    ``read_memories`` tools and a memory-aware system prompt, enabling
+    them to share observations, hypotheses, and learnings via a shared
+    memory bank backed by the same Store as solutions.
     """
     max_workers = concurrency or n_agents
 
@@ -263,6 +307,7 @@ def launch(
                     api_key=api_key,
                     label=label,
                     tracker=tracker,
+                    use_memory=use_memory,
                 ): (agent_model, label)
                 for agent_model, label in zip(agent_models, agent_labels)
             }

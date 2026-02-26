@@ -166,6 +166,7 @@ def launch(
     file_ext: Annotated[str, typer.Option("--file-ext", help="File extension for file materializer")] = ".py",
     concurrency: Annotated[Optional[int], typer.Option("--concurrency", help="Max concurrent agents")] = None,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Show agent output")] = False,
+    memory: Annotated[bool, typer.Option("--memory/--no-memory", help="Enable shared memory bank — agents record and read observations, hypotheses, and learnings")] = False,
     api_key: Annotated[Optional[str], typer.Option(envvar="OPENROUTER_API_KEY", help="OpenRouter API key")] = None,
 ) -> None:
     """Launch concurrent agents that iteratively produce and improve solutions."""
@@ -185,6 +186,8 @@ def launch(
     store.save_run(run)
     console.print(f"[bold green]Created run:[/] {run.id}")
     console.print(f"Launching {n_agents} agent(s) with max {max_steps} steps each")
+    if memory:
+        console.print("[dim]Shared memory bank: enabled[/]")
 
     solutions = do_launch(
         prompt=prompt,
@@ -199,6 +202,7 @@ def launch(
         concurrency=concurrency,
         verbose=verbose,
         api_key=api_key,
+        use_memory=memory,
     )
 
     console.print(f"\n[bold green]Done.[/] {len(solutions)} solution(s) produced")
@@ -332,6 +336,7 @@ def run_loop(
     mode: Annotated[str, typer.Option("--mode", help="Workflow mode: sample or agent")] = "sample",
     n_agents: Annotated[int, typer.Option("--n-agents", help="Number of agents for agent mode")] = 3,
     max_steps: Annotated[int, typer.Option("--max-steps", help="Max steps per agent")] = 10,
+    memory: Annotated[bool, typer.Option("--memory/--no-memory", help="Enable shared memory bank — agents record and read observations, hypotheses, and learnings; sample workflow injects round learnings into subsequent prompts")] = False,
 ) -> None:
     """Full workflow: sample → evaluate → select × N rounds, or agent mode."""
     from fanout.workflow import SampleWorkflow, LaunchWorkflow
@@ -355,6 +360,9 @@ def run_loop(
     eval_context["eval_timeout"] = eval_timeout
 
     lexer = _ext_to_lexer(file_ext)
+
+    if memory:
+        console.print("[dim]Shared memory bank: enabled[/]")
 
     if mode == "agent":
         wf = LaunchWorkflow()
@@ -380,6 +388,7 @@ def run_loop(
             full=full,
             console=console,
             syntax_lang=lexer,
+            use_memory=memory,
         )
     else:
         wf = SampleWorkflow()
@@ -409,6 +418,7 @@ def run_loop(
             full=full,
             console=console,
             syntax_lang=lexer,
+            use_memory=memory,
         )
 
     # Show final results
