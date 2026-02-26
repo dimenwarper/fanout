@@ -105,16 +105,18 @@ def run_task(
     mode: str = "sample",
     n_agents: int = 3,
     max_steps: int = 10,
+    use_memory: bool = False,
     store: Store | None = None,
 ) -> dict[str, Any]:
     console.rule(f"[bold cyan]Task: {task_name}[/]")
     console.print(f"  {task_info['description']} [{task_info['difficulty']}]")
+    mem_str = ", [bold]Memory:[/] enabled" if use_memory else ""
     if mode == "agent":
-        console.print(f"  [bold]Mode:[/] agent, [bold]Strategy:[/] {strategy}, [bold]Agents:[/] {n_agents}, [bold]Max steps:[/] {max_steps}")
+        console.print(f"  [bold]Mode:[/] agent, [bold]Strategy:[/] {strategy}, [bold]Agents:[/] {n_agents}, [bold]Max steps:[/] {max_steps}{mem_str}")
     elif model_set:
-        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Model set:[/] {model_set} (N={n_samples})")
+        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Model set:[/] {model_set} (N={n_samples}){mem_str}")
     else:
-        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Models:[/] {models}")
+        console.print(f"  [bold]Strategy:[/] {strategy}, [bold]Rounds:[/] {rounds}, [bold]Models:[/] {models}{mem_str}")
 
     prompt = build_prompt(task_name, task_info)
 
@@ -138,6 +140,7 @@ def run_task(
             full=full,
             console=console,
             syntax_lang="lean4",
+            use_memory=use_memory,
             store=store,
         )
     else:
@@ -161,6 +164,7 @@ def run_task(
             full=full,
             console=console,
             syntax_lang="lean4",
+            use_memory=use_memory,
             store=store,
         )
 
@@ -205,6 +209,7 @@ def main():
     parser.add_argument("--mode", choices=["sample", "agent"], default="sample", help="Workflow mode (default: sample)")
     parser.add_argument("--n-agents", type=int, default=3, help="Number of agents for agent mode (default: 3)")
     parser.add_argument("--max-steps", type=int, default=10, help="Max steps per agent (default: 10)")
+    parser.add_argument("--memory", action="store_true", default=False, help="Enable shared memory bank for agents (default: off)")
     parser.add_argument("--record", action="store_true", help="Save solutions and report to runs/ directory")
     parser.add_argument("--summary-model", default="anthropic/claude-sonnet-4-5", help="Model for LLM summary (default: anthropic/claude-sonnet-4-5)")
     args = parser.parse_args()
@@ -238,6 +243,7 @@ def main():
                 mode=args.mode,
                 n_agents=args.n_agents,
                 max_steps=args.max_steps,
+                use_memory=args.memory,
                 store=shared_store,
             )
             results.append(result)
