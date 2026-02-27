@@ -3,13 +3,72 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
+import httpx
 from smolagents import Tool
 
 from fanout.db.models import Memory, Solution
 from fanout.solution_format import extract_solution
 from fanout.store import Store
+
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+_SYNTHESIZE_PROMPT = """\
+You are a research assistant synthesizing a shared memory bank for coding agents.
+
+Below are raw memory entries (observations, hypotheses, learnings, strategies) \
+written by multiple agents working on the same task. Synthesize them into a \
+concise, actionable brief. Focus on:
+
+1. **What works** — approaches and techniques that scored well
+2. **What doesn't work** — failed approaches and why they failed
+3. **Key insights** — task-specific observations that should inform the next attempt
+4. **Best strategy going forward** — what to try next based on all evidence
+
+Drop redundant or low-value entries. Be concise — aim for a short briefing, \
+not a dump of everything. Include scores where relevant."""
+
+
+def _synthesize_memories(
+    memories: list[Memory],
+    model: str = "google/gemini-2.0-flash-001",
+    api_key: str | None = None,
+) -> str | None:
+    """Call a cheap LLM to synthesize raw memories into an actionable brief."""
+    api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        return None
+
+    lines: list[str] = []
+    for mem in memories:
+        score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
+        lines.append(f"[{mem.memory_type.upper()}] {mem.agent_id}{score_str}: {mem.content}")
+    raw = "\n".join(lines)
+
+    try:
+        resp = httpx.post(
+            OPENROUTER_API_URL,
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": _SYNTHESIZE_PROMPT},
+                    {"role": "user", "content": raw},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1024,
+            },
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    except Exception:
+        return None
 
 
 class ReadSolutionsTool(Tool):
@@ -230,9 +289,9 @@ class ReadMemoriesTool(Tool):
 
     name = "read_memories"
     description = (
-        "Read shared memories from all agents — observations, hypotheses, learnings, "
-        "and strategies. Call this before trying a new approach to build on what "
-        "others have already discovered."
+        "Read a synthesized briefing of shared memories from all agents — "
+        "what works, what doesn't, key insights, and recommended strategy. "
+        "Call this before trying a new approach to build on what others have discovered."
     )
     inputs = {
         "memory_type": {
@@ -246,18 +305,14 @@ class ReadMemoriesTool(Tool):
     }
     output_type = "string"
 
-    def __init__(self, store: Store, run_id: str, **kwargs: Any):
+    def __init__(self, store: Store, run_id: str, synthesize_model: str | None = None, **kwargs: Any):
         super().__init__(**kwargs)
         self._store = store
         self._run_id = run_id
+        self._synthesize_model = synthesize_model or "google/gemini-2.0-flash-001"
 
-    def forward(self, memory_type: str | None = None) -> str:
-        mtype = None if (not memory_type or memory_type == "all") else memory_type
-        memories = self._store.get_memories_for_run(self._run_id, memory_type=mtype)
-
-        if not memories:
-            return "The memory bank is empty — you are the first to record learnings."
-
+    def _raw_dump(self, memories: list[Memory]) -> str:
+        """Fallback: return raw memories when synthesis is unavailable."""
         lines = [f"=== Shared Memory Bank ({len(memories)} entr{'y' if len(memories)==1 else 'ies'}) ===\n"]
         for mem in memories:
             score_str = f"  score={mem.score:.3f}" if mem.score is not None else ""
@@ -267,6 +322,20 @@ class ReadMemoriesTool(Tool):
                 f"  {mem.content}\n"
             )
         return "\n".join(lines)
+
+    def forward(self, memory_type: str | None = None) -> str:
+        mtype = None if (not memory_type or memory_type == "all") else memory_type
+        memories = self._store.get_memories_for_run(self._run_id, memory_type=mtype)
+
+        if not memories:
+            return "The memory bank is empty — you are the first to record learnings."
+
+        # Synthesize with a cheap LLM; fall back to raw dump on failure
+        synthesis = _synthesize_memories(memories, model=self._synthesize_model)
+        if synthesis:
+            return f"=== Synthesized Briefing ({len(memories)} memories) ===\n\n{synthesis}"
+
+        return self._raw_dump(memories)
 
 
 class ReadPromptTool(Tool):

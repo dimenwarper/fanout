@@ -235,7 +235,7 @@ def _run_single_agent(
     if use_memory:
         tools += [
             WriteMemoryTool(store=store, run_id=run_id, agent_id=agent_id),
-            ReadMemoriesTool(store=store, run_id=run_id),
+            ReadMemoriesTool(store=store, run_id=run_id, synthesize_model=model),
         ]
 
     if eval_script:
