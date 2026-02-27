@@ -584,3 +584,5 @@ class LaunchWorkflow(Workflow):
     def _execute(self, ctx: WorkflowContext) -> None:
         launch_step(ctx, n_agents=self._n_agents, max_steps=self._max_steps)
         select_step(ctx)
+        if ctx.use_memory:
+            memory_step(ctx)
