@@ -274,16 +274,26 @@ def evolve_step(ctx: WorkflowContext) -> None:
             k_agg=ctx.k_agg,
         )
 
-        # Prepend accumulated memories when the memory bank is enabled
+        # Prepend synthesized memories when the memory bank is enabled
         if ctx.use_memory:
             memories = ctx.store.get_memories_for_run(ctx.run.id)
             if memories:
-                lines = ["=== Shared Learnings from Previous Rounds ==="]
-                for mem in memories:
-                    score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
-                    lines.append(f"[{mem.memory_type}]{score_str}: {mem.content}")
-                lines.append("=== End of Learnings ===\n")
-                prefix = "\n".join(lines) + "\n"
+                from fanout.agent_tools import _synthesize_memories
+
+                synthesis = _synthesize_memories(
+                    memories,
+                    model=ctx.config.models[0],
+                )
+                if synthesis:
+                    prefix = f"=== Learnings from Previous Rounds ===\n{synthesis}\n=== End of Learnings ===\n\n"
+                else:
+                    # Fallback to raw dump if synthesis fails
+                    lines = ["=== Learnings from Previous Rounds ==="]
+                    for mem in memories:
+                        score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
+                        lines.append(f"[{mem.memory_type}]{score_str}: {mem.content}")
+                    lines.append("=== End of Learnings ===\n")
+                    prefix = "\n".join(lines) + "\n"
                 if isinstance(prompt, list):
                     prompt = [prefix + p for p in prompt]
                 else:
