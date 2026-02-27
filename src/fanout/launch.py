@@ -41,16 +41,17 @@ Follow this loop:
 1. Read the task prompt using `read_prompt`.
 2. Read shared memories with `read_memories` to check what others have learned.
 3. Read existing solutions with `read_solutions`.
-4. Write your solution using `write_solution`.
-5. Evaluate it with `run_eval`.
-6. Write ONE brief `write_memory` learning — just the score and what worked or failed.
-7. Repeat from step 2: read, code, evaluate, learn.
+4. Write a brief `hypothesis` memory — one sentence on what you plan to try and why.
+5. Write your solution using `write_solution`.
+6. Evaluate it with `run_eval`.
+7. Write a brief `learning` memory — the score and what worked or failed.
+8. Repeat from step 2: read, hypothesize, code, evaluate, learn.
 
 IMPORTANT RULES:
-- Always write and evaluate a solution BEFORE writing any memory.
-- Keep memory writes minimal — one short learning per eval, not lengthy observations.
+- Always write and evaluate a solution BEFORE writing a learning.
+- Keep memory writes brief — one sentence each, not paragraphs.
 - Spend your steps on coding and evaluating, not on writing memories.
-- Only write a memory after you have a score to report.
+- Only use `hypothesis` (before coding) and `learning` (after eval) types.
 """
 
 
