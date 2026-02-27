@@ -184,6 +184,7 @@ def run_task(
             "mode": mode,
             "iterations": max_steps if mode == "agent" else rounds,
             "best_score": result.best_score,
+            "benchmark": task_info.get("benchmark"),
             "round_scores": result.round_scores,
             "run_id": result.run_id,
         }
@@ -264,14 +265,16 @@ def main():
     table.add_column("Mode")
     table.add_column("Rounds/Steps", justify="right")
     table.add_column("Best Score", justify="right", style="bold green")
+    table.add_column("Benchmark", justify="right", style="dim")
     table.add_column("Per-Round Scores", style="dim")
     table.add_column("Run ID", style="dim")
 
     for r in results:
         scores_str = " → ".join(f"{s:.3f}" for s in r["round_scores"])
+        bench = str(r.get("benchmark", "—"))
         table.add_row(
             r["task"], r["strategy"], r["mode"], str(r["iterations"]),
-            f"{r['best_score']:.4f}", scores_str, r["run_id"][:8],
+            f"{r['best_score']:.4f}", bench, scores_str, r["run_id"][:8],
         )
     console.print(table)
 
