@@ -125,11 +125,12 @@ class WriteSolutionTool(Tool):
     }
     output_type = "string"
 
-    def __init__(self, store: Store, run_id: str, model: str, **kwargs: Any):
+    def __init__(self, store: Store, run_id: str, model: str, agent_id: str = "", **kwargs: Any):
         super().__init__(**kwargs)
         self._store = store
         self._run_id = run_id
         self._model = model
+        self._agent_id = agent_id
         self._iteration = 0
 
     def forward(self, solution: str) -> str:
@@ -138,7 +139,7 @@ class WriteSolutionTool(Tool):
             run_id=self._run_id,
             model=self._model,
             output=solution,
-            metadata={"source": "agent", "iteration": self._iteration},
+            metadata={"source": "agent", "agent_id": self._agent_id, "iteration": self._iteration},
         )
         self._store.save_solution(sol)
         return f"Solution saved with ID: {sol.id} (iteration {self._iteration})"

@@ -224,7 +224,7 @@ def _run_single_agent(
 
     tools: list[Any] = [
         ReadSolutionsTool(store=store, run_id=run_id),
-        WriteSolutionTool(store=store, run_id=run_id, model=model),
+        WriteSolutionTool(store=store, run_id=run_id, model=model, agent_id=agent_id),
         ReadPromptTool(prompt=prompt),
     ]
 
@@ -266,11 +266,11 @@ def _run_single_agent(
     )
     agent.run(task_msg)
 
-    # Collect all solutions this agent produced (by model name + source metadata)
+    # Collect solutions this specific agent produced
     all_solutions = store.get_solutions_for_run(run_id)
     return [
         s for s in all_solutions
-        if s.model == model and s.metadata.get("source") == "agent"
+        if s.metadata.get("agent_id") == agent_id
     ]
 
 
