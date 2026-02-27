@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import shutil
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
@@ -157,6 +158,15 @@ def save_record(
     run_id = results[0]["run_id"] if results else "unknown"
     dir_name = name or run_id[:8]
     run_dir = output_dir / dir_name
+
+    # If directory already exists, ask for confirmation before overwriting
+    if run_dir.exists():
+        answer = input(f"  Record directory '{run_dir}' already exists. Overwrite? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("  Skipping record save.")
+            return run_dir
+        shutil.rmtree(run_dir)
+
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # manifest.json

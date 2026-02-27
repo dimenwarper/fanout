@@ -285,7 +285,7 @@ def main():
         )
         console.print(f"\n[bold]Summary:[/]\n{summary}")
         path = save_record(results, shared_store, BENCHMARK_DIR / "runs", name=run_name, summary=summary)
-        console.print(f"\n[dim]Saved to {path}[/]")
+        console.print(f"\n[bold]Recorded to:[/] {path}")
 
 
 if __name__ == "__main__":
