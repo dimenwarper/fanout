@@ -272,10 +272,6 @@ def main():
         )
     console.print(table)
 
-    # Memory bank summary
-    if args.memory and results:
-        print_memory_summary(results, shared_store, console)
-
     if args.record and results:
         summary = asyncio.run(
             generate_summary(results, shared_store, model=args.summary_model)

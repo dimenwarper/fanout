@@ -275,10 +275,6 @@ def main():
         solved = sum(1 for r in strat_results if r["solved"])
         console.print(f"  {strat}: {solved}/{len(strat_results)} solved")
 
-    # Memory bank summary
-    if args.memory and results:
-        print_memory_summary(results, shared_store, console)
-
     if args.record and results:
         summary = asyncio.run(
             generate_summary(results, shared_store, model=args.summary_model)
