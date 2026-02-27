@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -123,10 +125,26 @@ async def generate_summary(
         return data["choices"][0]["message"]["content"]
 
 
+def _build_scores_csv(results: list[dict[str, Any]]) -> str:
+    """Build a CSV with step, task, strategy, max_score columns."""
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["step", "task", "strategy", "max_score"])
+    for r in results:
+        task = r.get("task", "task")
+        strategy = r.get("strategy", "unknown")
+        running_max = 0.0
+        for step, score in enumerate(r.get("round_scores", []), 1):
+            running_max = max(running_max, score)
+            writer.writerow([step, task, strategy, f"{running_max:.4f}"])
+    return buf.getvalue()
+
+
 def save_record(
     results: list[dict[str, Any]],
     store: Store,
     output_dir: Path,
+    name: str | None = None,
     summary: str | None = None,
     top_k: int = 3,
     cli_args: dict[str, Any] | None = None,
@@ -135,14 +153,16 @@ def save_record(
 
     Returns the path to the created directory.
     """
-    # Use first run_id as directory name
+    # Use name if provided, otherwise first run_id
     run_id = results[0]["run_id"] if results else "unknown"
-    run_dir = output_dir / run_id[:8]
+    dir_name = name or run_id[:8]
+    run_dir = output_dir / dir_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # manifest.json
     manifest = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "name": name,
         "tasks": [r.get("task") for r in results],
         "strategies": list({r.get("strategy") for r in results}),
         "run_ids": [r["run_id"] for r in results],
@@ -153,6 +173,9 @@ def save_record(
 
     # results.json
     (run_dir / "results.json").write_text(json.dumps(results, indent=2))
+
+    # scores.csv — step-by-step max score progression
+    (run_dir / "scores.csv").write_text(_build_scores_csv(results))
 
     # solutions/
     sol_dir = run_dir / "solutions"

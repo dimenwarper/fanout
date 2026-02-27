@@ -210,7 +210,7 @@ def main():
     parser.add_argument("--n-agents", type=int, default=3, help="Number of agents for agent mode (default: 3)")
     parser.add_argument("--max-steps", type=int, default=10, help="Max steps per agent (default: 10)")
     parser.add_argument("--memory", action="store_true", default=False, help="Enable shared memory bank for agents (default: off)")
-    parser.add_argument("--record", action="store_true", help="Save solutions and report to runs/ directory")
+    parser.add_argument("--record", nargs="?", const=True, default=None, metavar="NAME", help="Save to runs/ directory (optional name, e.g. --record haiku-no-memory)")
     parser.add_argument("--summary-model", default="anthropic/claude-sonnet-4-5", help="Model for LLM summary (default: anthropic/claude-sonnet-4-5)")
     args = parser.parse_args()
 
@@ -275,12 +275,13 @@ def main():
         solved = sum(1 for r in strat_results if r["solved"])
         console.print(f"  {strat}: {solved}/{len(strat_results)} solved")
 
-    if args.record and results:
+    if args.record is not None and results:
+        run_name = args.record if isinstance(args.record, str) else None
         summary = asyncio.run(
             generate_summary(results, shared_store, model=args.summary_model)
         )
         console.print(f"\n[bold]Summary:[/]\n{summary}")
-        path = save_record(results, shared_store, BENCHMARK_DIR / "runs", summary=summary)
+        path = save_record(results, shared_store, BENCHMARK_DIR / "runs", name=run_name, summary=summary)
         console.print(f"\n[dim]Saved to {path}[/]")
 
 
