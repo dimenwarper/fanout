@@ -27,7 +27,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from rich.console import Console
 from rich.table import Table
 
-from fanout.report import generate_summary, save_record
+from fanout.report import generate_summary, print_memory_summary, save_record
 from fanout.store import Store
 from fanout.workflow import SampleWorkflow, LaunchWorkflow, WorkflowContext
 
@@ -274,6 +274,10 @@ def main():
         strat_results = [r for r in results if r["strategy"] == strat]
         solved = sum(1 for r in strat_results if r["solved"])
         console.print(f"  {strat}: {solved}/{len(strat_results)} solved")
+
+    # Memory bank summary
+    if args.memory and results:
+        print_memory_summary(results, shared_store, console)
 
     if args.record and results:
         summary = asyncio.run(

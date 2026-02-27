@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 
 from fanout.channels.memory import MemoryChannel
-from fanout.db.models import Evaluation, Run, Solution, SolutionWithScores
+from fanout.db.models import Evaluation, Memory, Run, Solution, SolutionWithScores
 from fanout.providers.openrouter import SamplingConfig
 from fanout.store import Store
 from fanout.strategies.base import get_strategy
@@ -19,9 +19,11 @@ from fanout.workflow import (
     Workflow,
     WorkflowContext,
     WorkflowResult,
+    _print_memory_table,
     evaluate_step,
     evolve_step,
     launch_step,
+    memory_step,
     sample_step,
     select_step,
 )
@@ -329,6 +331,7 @@ class TestLaunchWorkflow:
             verbose=ctx.verbose,
             api_key=ctx.api_key,
             console=ctx.console,
+            use_memory=ctx.use_memory,
         )
 
     @patch("fanout.workflow.do_launch")
@@ -359,3 +362,81 @@ class TestLaunchWorkflow:
         assert len(result.round_scores) == 1
         assert result.best_score == pytest.approx(0.9)
         mock_launch.assert_called_once()
+
+
+# ── Memory tests ────────────────────────────────────────
+
+
+class TestMemoryStep:
+    def test_memory_step_saves_learning(self):
+        store = _make_store()
+        ctx = _make_ctx(store=store, use_memory=True)
+        sol, ev = _make_solution(ctx.run.id, score=0.8)
+        store.save_solution(sol)
+        store.save_evaluation(ev)
+        ctx.selected = [SolutionWithScores(solution=sol, evaluations=[ev], aggregate_score=0.8)]
+
+        memory_step(ctx)
+
+        memories = store.get_memories_for_run(ctx.run.id)
+        assert len(memories) >= 1
+        assert memories[0].memory_type == "learning"
+        assert "Round 0 best" in memories[0].content
+
+    def test_print_memory_table_renders(self):
+        store = _make_store()
+        buf = StringIO()
+        test_console = Console(file=buf, force_terminal=True, width=120)
+        ctx = _make_ctx(store=store, use_memory=True, console=test_console)
+
+        store.save_memory(Memory(
+            run_id=ctx.run.id,
+            agent_id="test-agent",
+            memory_type="learning",
+            content="Test learning content",
+            score=0.75,
+        ))
+
+        _print_memory_table(ctx)
+
+        output = buf.getvalue()
+        assert "Memory Bank" in output
+        assert "learning" in output
+        assert "test-agent" in output
+        assert "0.750" in output
+
+    def test_print_memory_table_skipped_without_memory_flag(self):
+        store = _make_store()
+        buf = StringIO()
+        test_console = Console(file=buf, force_terminal=True, width=120)
+        ctx = _make_ctx(store=store, use_memory=False, console=test_console)
+
+        store.save_memory(Memory(
+            run_id=ctx.run.id,
+            agent_id="test-agent",
+            memory_type="observation",
+            content="This should not be printed",
+        ))
+
+        _print_memory_table(ctx)
+
+        output = buf.getvalue()
+        assert output == ""
+
+    def test_memory_step_with_visualization(self):
+        """End-to-end: memory_step saves + renders the table."""
+        store = _make_store()
+        buf = StringIO()
+        test_console = Console(file=buf, force_terminal=True, width=120)
+        ctx = _make_ctx(store=store, use_memory=True, console=test_console)
+
+        sol, ev = _make_solution(ctx.run.id, score=0.9)
+        store.save_solution(sol)
+        store.save_evaluation(ev)
+        ctx.selected = [SolutionWithScores(solution=sol, evaluations=[ev], aggregate_score=0.9)]
+
+        memory_step(ctx)
+
+        output = buf.getvalue()
+        assert "Memory Bank" in output
+        assert "learning" in output

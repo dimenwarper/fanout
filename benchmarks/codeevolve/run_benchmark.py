@@ -31,7 +31,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from rich.console import Console
 from rich.table import Table
 
-from fanout.report import generate_summary, save_record
+from fanout.report import generate_summary, print_memory_summary, save_record
 from fanout.store import Store
 from fanout.workflow import SampleWorkflow, LaunchWorkflow
 
@@ -274,6 +274,10 @@ def main():
             f"{r['best_score']:.4f}", scores_str, r["run_id"][:8],
         )
     console.print(table)
+
+    # Memory bank summary
+    if args.memory and results:
+        print_memory_summary(results, shared_store, console)
 
     if args.record and results:
         summary = asyncio.run(

@@ -10,10 +10,52 @@ from typing import Any
 
 import httpx
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 from fanout.solution_format import extract_solution
 from fanout.store import Store
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+_MEMORY_TYPE_STYLE: dict[str, str] = {
+    "observation": "cyan",
+    "hypothesis": "yellow",
+    "learning": "green",
+    "strategy": "magenta",
+}
+
+
+def print_memory_summary(
+    results: list[dict[str, Any]],
+    store: Store,
+    console: Console,
+) -> None:
+    """Print a memory bank panel for each task that has memories."""
+    for r in results:
+        memories = store.get_memories_for_run(r["run_id"])
+        if not memories:
+            continue
+        mem_table = Table(show_header=True, header_style="bold", expand=True, box=None)
+        mem_table.add_column("Type", style="bold", width=12)
+        mem_table.add_column("Agent", style="dim", width=22)
+        mem_table.add_column("Score", justify="right", width=7)
+        mem_table.add_column("Content")
+        for mem in memories:
+            style = _MEMORY_TYPE_STYLE.get(mem.memory_type, "white")
+            score_str = f"{mem.score:.3f}" if mem.score is not None else "—"
+            content = mem.content if len(mem.content) <= 120 else mem.content[:117] + "..."
+            mem_table.add_row(
+                f"[{style}]{mem.memory_type}[/]", mem.agent_id,
+                score_str, content,
+            )
+        task = r.get("task", r["run_id"][:8])
+        console.print(Panel(
+            mem_table,
+            title=f"[bold]Memory Bank — {task}[/] ({len(memories)} entries)",
+            border_style="dim blue",
+        ))
 
 
 async def generate_summary(
