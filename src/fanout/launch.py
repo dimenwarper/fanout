@@ -58,10 +58,19 @@ and to avoid repeating mistakes others have already made.
 """
 
 
+_MEMORY_TYPE_STYLE: dict[str, str] = {
+    "observation": "cyan",
+    "hypothesis":  "yellow",
+    "learning":    "green",
+    "strategy":    "magenta",
+}
+
+
 class _AgentTracker:
     """Thread-safe tracker for agent step progress, rendered via Rich Live."""
 
-    def __init__(self, agent_labels: list[str], max_steps: int, console: Console | None = None):
+    def __init__(self, agent_labels: list[str], max_steps: int, console: Console | None = None,
+                 store: Store | None = None, run_id: str | None = None):
         self._lock = threading.Lock()
         self._max_steps = max_steps
         self._top_score: float = 0.0
@@ -69,16 +78,43 @@ class _AgentTracker:
             label: {"step": 0, "tool": "", "obs": "", "status": "running"}
             for label in agent_labels
         }
+        self._store = store
+        self._run_id = run_id
         self._console = console or Console()
         self._live = Live(self._build_display(), console=self._console, refresh_per_second=4)
 
     _SCORE_RE = re.compile(r"Score:\s*([\d.]+)")
+
+    def _build_memory_table(self) -> Table | None:
+        """Build a compact memory table from the store (called inside lock)."""
+        if not self._store or not self._run_id:
+            return None
+        memories = self._store.get_memories_for_run(self._run_id)
+        if not memories:
+            return None
+
+        table = Table(show_header=True, header_style="dim", expand=False, pad_edge=False,
+                      title="Memory Bank", title_style="dim blue")
+        table.add_column("Type", style="bold", width=12)
+        table.add_column("Agent", style="dim", width=18)
+        table.add_column("Content", max_width=60)
+
+        for mem in memories:
+            style = _MEMORY_TYPE_STYLE.get(mem.memory_type, "white")
+            content = mem.content if len(mem.content) <= 57 else mem.content[:54] + "..."
+            agent = mem.agent_id if len(mem.agent_id) <= 18 else mem.agent_id[:15] + "..."
+            table.add_row(f"[{style}]{mem.memory_type}[/]", agent, content)
+
+        return table
 
     def _build_display(self) -> Group:
         with self._lock:
             score_line = Text(f"  Top score: {self._top_score:.4f}", style="bold green")
 
         table = self._build_table()
+        mem_table = self._build_memory_table()
+        if mem_table:
+            return Group(score_line, table, Text(""), mem_table)
         return Group(score_line, table)
 
     def _build_table(self) -> Table:
@@ -288,7 +324,10 @@ def launch(
 
     all_solutions: list[Solution] = []
 
-    tracker = _AgentTracker(agent_labels, max_steps, console=console) if verbose else None
+    tracker = _AgentTracker(
+        agent_labels, max_steps, console=console,
+        store=store if use_memory else None, run_id=run_id if use_memory else None,
+    ) if verbose else None
 
     ctx_manager = tracker if tracker else _nullcontext()
     with ctx_manager:
