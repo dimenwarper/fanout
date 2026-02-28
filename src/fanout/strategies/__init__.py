@@ -9,3 +9,4 @@ import fanout.strategies.rsa  # noqa: F401
 import fanout.strategies.alphaevolve  # noqa: F401
 import fanout.strategies.darwinian      # noqa: F401
 import fanout.strategies.epsilon_greedy  # noqa: F401
+import fanout.strategies.pareto          # noqa: F401
