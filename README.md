@@ -192,6 +192,7 @@ Selection strategies determine how solutions survive between rounds. The choice 
 | `alphaevolve` | Inspired by [AlphaEvolve](https://arxiv.org/abs/2506.13131). Combines score-aware tournament selection with diversity preservation, score-annotated aggregation prompts, and score-biased parent subsampling. Designed for tasks where both quality and diversity matter. |
 | `map-elites` | Selects the best solution per behavioral dimension cell (e.g., model, output length bucket). Maintains a diverse archive across multiple niches rather than converging on a single solution type. |
 | `island` | Evolves separate subpopulations per model with periodic migration of top solutions between islands. Useful when different models have fundamentally different solution styles and you want to preserve that diversity while still sharing good ideas. |
+| `darwinian` | **Sigmoid-scaled selection with novelty bonus**, inspired by [Imbue's Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver) and the Darwin Gödel Machines paper. Parent weight = `sigmoid(sharpness × (score − midpoint)) × (1 / (1 + novelty_weight × times_used_as_parent))`. The sigmoid midpoint adapts to the current score distribution (default: 75th percentile), preventing winner-take-all dynamics. The novelty bonus penalises solutions that have already been used as parents many times, forcing exploration of the population even when one solution dominates. |
 
 ## Examples
 
@@ -276,7 +277,42 @@ uv run fanout run "Optimize this circle packing algorithm..." \
   --eval-script ./eval.sh -p 4
 ```
 
-### 6. Parallel evaluation
+### 6. Darwinian selection
+
+The `darwinian` strategy avoids premature convergence by combining sigmoid-scaled scoring with a novelty bonus. Unlike `top-k` (pure elitism) or `weighted` (raw score proportional), it shapes the selection pressure with a tunable sigmoid and actively penalises over-used parents so the population keeps exploring.
+
+```bash
+uv run fanout run "Write an optimized Python merge sort" \
+  -M coding -n 8 \
+  -s darwinian --k 3 -r 5 \
+  --eval-script ./eval.sh -p 4
+```
+
+Key parameters (passed via Python API; CLI flags coming soon):
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `darwinian_sharpness` | `10.0` | Sigmoid steepness — higher = more winner-take-all |
+| `darwinian_midpoint` | `"p75"` | Sigmoid midpoint: `"pNN"` for Nth-percentile adaptive, or a fixed float |
+| `darwinian_novelty_weight` | `1.0` | Novelty penalty per prior parent use — higher = more exploration |
+
+```python
+from fanout.workflow import SampleWorkflow
+
+wf = SampleWorkflow()
+result = wf.run(
+    prompt="...",
+    strategy="darwinian",
+    k=3,
+    rounds=5,
+    darwinian_sharpness=5.0,       # softer selection pressure
+    darwinian_midpoint="p50",      # midpoint = median score
+    darwinian_novelty_weight=2.0,  # strong novelty pressure
+    ...
+)
+```
+
+### 7. Parallel evaluation
 
 Use `-p` to run evaluations concurrently — useful for CPU-bound script evals on multi-core machines:
 
@@ -344,7 +380,8 @@ src/fanout/
     ├── rsa.py             # Recursive Self-Aggregation
     ├── alphaevolve.py     # AlphaEvolve (score-aware + diversity-preserving)
     ├── map_elites.py      # MAP-Elites diversity selection
-    └── island.py          # Island model with migration
+    ├── island.py          # Island model with migration
+    └── darwinian.py       # Darwinian: sigmoid + novelty-bonus weighted selection
 ```
 
 Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs). A SQLite channel backend is also available for environments without Redis — pass a `SqliteChannel` to `Store()` to use it.
