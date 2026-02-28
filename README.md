@@ -193,6 +193,8 @@ Selection strategies determine how solutions survive between rounds. The choice 
 | `map-elites` | Selects the best solution per behavioral dimension cell (e.g., model, output length bucket). Maintains a diverse archive across multiple niches rather than converging on a single solution type. |
 | `island` | Evolves separate subpopulations per model with periodic migration of top solutions between islands. Useful when different models have fundamentally different solution styles and you want to preserve that diversity while still sharing good ideas. |
 | `darwinian` | **Sigmoid-scaled selection with novelty bonus**, inspired by [Imbue's Darwinian Evolver](https://github.com/imbue-ai/darwinian_evolver) and the Darwin Gödel Machines paper. Parent weight = `sigmoid(sharpness × (score − midpoint)) × (1 / (1 + novelty_weight × times_used_as_parent))`. The sigmoid midpoint adapts to the current score distribution (default: 75th percentile), preventing winner-take-all dynamics. The novelty bonus penalises solutions that have already been used as parents many times, forcing exploration of the population even when one solution dominates. |
+| `pareto` | **Pareto-front selection** across multiple evaluator objectives (inspired by [GEPA](https://github.com/gepa-ai/gepa)). A solution is on the Pareto front if no other solution beats it on *all* evaluators simultaneously — preserving genuine quality trade-offs that a single aggregate score would collapse. Front members are returned first; remaining slots are filled by aggregate score. Falls back to top-k with a single evaluator. |
+| `epsilon-greedy` | **Epsilon-greedy selection** (inspired by GEPA). With probability `ε` (`--epsilon`, default 0.1) a random candidate is chosen (exploration); otherwise the best remaining is taken (exploitation). Selection is without replacement so all k results are distinct. A simple, interpretable exploration-vs-exploitation baseline. |
 
 ## Examples
 
@@ -312,7 +314,54 @@ result = wf.run(
 )
 ```
 
-### 7. Parallel evaluation
+### 7. Pareto-front selection
+
+Use `pareto` when running multiple evaluators and you want to preserve solutions with genuinely different trade-offs rather than collapsing them to a single score. For example, if you evaluate both `latency` *and* `accuracy`, a solution that's fast-but-slightly-less-accurate won't be eliminated just because another solution is slow-but-more-accurate.
+
+```bash
+uv run fanout run "Write a Python function to parse ISO 8601 timestamps" \
+  -M coding -n 8 \
+  -e latency -e accuracy --reference "2024-01-15T09:30:00" \
+  -s pareto --k 3 -r 4
+```
+
+The Pareto front is computed per round. Front members seed the next generation; remaining slots are filled from non-front solutions by aggregate score.
+
+### 8. Epsilon-greedy selection
+
+A simple exploration-vs-exploitation baseline. `--epsilon` controls how often a random (non-greedy) candidate is chosen:
+
+```bash
+# 20% random exploration, 80% greedy
+uv run fanout run "Write a merge sort in Python" \
+  -M coding -n 6 --eval-script ./eval.sh \
+  -s epsilon-greedy --epsilon 0.2 -r 4
+```
+
+### 9. Reflective mutation
+
+Enable `--reflection` to have an LLM analyze each round's execution traces and produce a targeted improvement brief that is prepended to the next round's prompt. Inspired by [GEPA's ReflectiveMutationProposer](https://github.com/gepa-ai/gepa): instead of just showing raw error output, the LLM diagnoses *why* approaches failed and suggests specific fixes.
+
+```bash
+uv run fanout run "Write a Python function to find the longest palindromic substring" \
+  -M coding -n 6 --eval-script ./eval.sh \
+  -s darwinian -r 5 --reflection
+```
+
+A cheap fast model (Gemini Flash by default) reads each round's scores + stderr and produces a brief like:
+
+> *"All solutions fail on single-character inputs. Two solutions hit O(n³) complexity — use Manacher's algorithm or expand-around-center for O(n). One solution has an off-by-one error in the slice bounds."*
+
+Use `--reflection-model` to switch the reflection LLM:
+
+```bash
+uv run fanout run "..." -M coding -s darwinian -r 5 \
+  --reflection --reflection-model openai/gpt-4o-mini
+```
+
+Reflection degrades gracefully — if the LLM call fails the workflow continues unaffected.
+
+### 10. Parallel evaluation
 
 Use `-p` to run evaluations concurrently — useful for CPU-bound script evals on multi-core machines:
 
@@ -354,7 +403,8 @@ src/fanout/
 ├── sample.py              # Sampling orchestration
 ├── launch.py              # Agent-based launch orchestration
 ├── agent_tools.py         # smolagents tools (read_prompt, write_solution, run_eval, etc.)
-├── evaluate.py            # Evaluation orchestration (supports parallel via -p)
+├── evaluate.py            # Evaluation orchestration (parallel -p, content-addressed cache)
+├── reflect.py             # Reflective mutation — LLM failure diagnosis between rounds
 ├── select.py              # Selection orchestration
 ├── store.py               # Storage facade (Redis → in-memory fallback)
 ├── model_sets.py           # Weighted model set definitions
@@ -381,7 +431,9 @@ src/fanout/
     ├── alphaevolve.py     # AlphaEvolve (score-aware + diversity-preserving)
     ├── map_elites.py      # MAP-Elites diversity selection
     ├── island.py          # Island model with migration
-    └── darwinian.py       # Darwinian: sigmoid + novelty-bonus weighted selection
+    ├── darwinian.py       # Darwinian: sigmoid + novelty-bonus weighted selection
+    ├── epsilon_greedy.py  # Epsilon-greedy: exploration vs exploitation baseline
+    └── pareto.py          # Pareto-front: non-dominated multi-objective selection
 ```
 
 Data is stored in Redis (`localhost:6379`, key prefix `fanout:`). If Redis is unavailable, an in-memory store is used (data does not persist across runs). A SQLite channel backend is also available for environments without Redis — pass a `SqliteChannel` to `Store()` to use it.

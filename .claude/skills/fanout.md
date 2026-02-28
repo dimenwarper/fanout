@@ -35,6 +35,21 @@ uv run fanout run "YOUR PROMPT" \
   -M coding -e script --eval-script ./eval.sh \
   -s darwinian -r 5 -n 8 --memory
 
+# Pareto-front selection — preserves non-dominated trade-offs across evaluators
+uv run fanout run "YOUR PROMPT" \
+  -M coding -e latency -e accuracy --reference "expected" \
+  -s pareto -r 4 -n 8
+
+# Epsilon-greedy — 20% random exploration, 80% greedy
+uv run fanout run "YOUR PROMPT" \
+  -M coding -e script --eval-script ./eval.sh \
+  -s epsilon-greedy --epsilon 0.2 -r 4 -n 8
+
+# Reflective mutation — LLM diagnoses failures and injects improvement brief each round
+uv run fanout run "YOUR PROMPT" \
+  -M coding -e script --eval-script ./eval.sh \
+  -s darwinian -r 5 -n 8 --reflection
+
 # Verbose output with syntax-highlighted previews
 uv run fanout run "YOUR PROMPT" -m openai/gpt-4o-mini -n 5 -r 3 -v
 
@@ -130,14 +145,21 @@ uv run fanout list-model-sets
   - `island` — evolve subpopulations per model with periodic migration
   - `map-elites` — best solution per behavioral dimension cell
   - `darwinian` — **sigmoid-scaled selection with novelty bonus** (see below)
+  - `pareto` — **Pareto-front selection** across all evaluator objectives; preserves non-dominated trade-offs
+  - `epsilon-greedy` — with probability `--epsilon` pick a random candidate, otherwise pick the best
 - `-r/--rounds`: Number of evolutionary rounds. Default: `1`
 - `--k`: Selection size. Default: `3`
 - `--k-agg`: Number of parent solutions per aggregation prompt (RSA/alphaevolve). Default: `6`
+- `--epsilon`: Exploration probability for epsilon-greedy strategy. Default: `0.1`
 
 ### Memory bank
 - `--memory`: Enable shared memory bank across rounds/agents. When set:
   - **Sample mode**: after each round, learnings from the best and worst selected solutions are written to the memory bank and injected into the next round's prompt as context
   - **Agent mode**: each agent gets `write_memory` and `read_memories` tools and a memory-aware system prompt; agents share observations, hypotheses, and learnings in real time
+
+### Reflective mutation
+- `--reflection/--no-reflection`: After each round, call an LLM to diagnose failure modes from execution traces and prepend the resulting improvement brief to the next round's prompt (inspired by GEPA)
+- `--reflection-model`: Model used for the reflection call. Default: `google/gemini-2.0-flash-001`
 
 ### Output
 - `-v/--verbose`: Show per-solution details with syntax-highlighted code previews
