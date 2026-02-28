@@ -88,6 +88,13 @@ class WorkflowContext:
     # Set to None to disable caching.
     eval_cache: EvaluationCache | None = field(default_factory=EvaluationCache)
 
+    # ── Reflective mutation parameters ───────────────────
+    # When True, an LLM diagnoses failures after each round and the resulting
+    # brief is prepended to the next round's prompt (inspired by GEPA).
+    use_reflection: bool = False
+    # Model used for the reflection call (cheap/fast recommended).
+    reflection_model: str = "google/gemini-2.0-flash-001"
+
     # ── Set during loop ──────────────────────────────────
     round_num: int = 0
     current_prompt: str | list[str] = ""
@@ -101,6 +108,8 @@ class WorkflowContext:
     # Maps solution_id → number of times selected as a parent across rounds.
     # Used by DarwinianStrategy to apply the novelty bonus (penalise over-used parents).
     selection_counts: dict[str, int] = field(default_factory=dict)
+    # LLM-generated improvement brief from reflect_step; consumed by evolve_step.
+    reflection: str = ""
 
 
 StepFn = Callable[[WorkflowContext], None]
@@ -292,6 +301,40 @@ def memory_step(ctx: WorkflowContext) -> None:
     _print_memory_table(ctx)
 
 
+def reflect_step(ctx: WorkflowContext) -> None:
+    """Call an LLM to diagnose failures and store a targeted improvement brief.
+
+    Inspired by GEPA's ReflectiveMutationProposer: reads the full execution
+    traces of the selected solutions and produces a concise brief explaining
+    *why* candidates failed and what to change.  The brief is stored on the
+    context and prepended to the next round's prompt by ``evolve_step``.
+
+    Only runs when ``ctx.use_reflection`` is True and there are selected
+    solutions with at least one non-perfect score.  Skips silently (no error)
+    when the LLM call fails so the workflow degrades gracefully.
+    """
+    if not ctx.use_reflection or not ctx.selected:
+        return
+
+    # Skip on last round — there is no next prompt to enrich
+    if ctx.round_num >= ctx.rounds - 1:
+        return
+
+    from fanout.reflect import reflect
+
+    brief = reflect(
+        ctx.selected,
+        ctx.round_num,
+        model=ctx.reflection_model,
+        api_key=ctx.api_key,
+    )
+
+    if brief:
+        ctx.reflection = brief
+        if ctx.console:
+            ctx.console.print(f"  [dim]reflection: {brief[:120]}{'...' if len(brief) > 120 else ''}[/]")
+
+
 def evolve_step(ctx: WorkflowContext) -> None:
     """Build prompts for the next round and advance the run."""
     ctx.store.update_run_round(ctx.run.id, ctx.round_num + 1)
@@ -305,6 +348,19 @@ def evolve_step(ctx: WorkflowContext) -> None:
             n_samples=ctx.config.n_samples,
             k_agg=ctx.k_agg,
         )
+
+        # Prepend reflective-mutation brief when reflection is enabled
+        if ctx.use_reflection and ctx.reflection:
+            prefix = (
+                f"=== Improvement Brief (Round {ctx.round_num} Analysis) ===\n"
+                f"{ctx.reflection}\n"
+                f"=== End of Brief ===\n\n"
+            )
+            if isinstance(prompt, list):
+                prompt = [prefix + p for p in prompt]
+            else:
+                prompt = prefix + prompt
+            ctx.reflection = ""  # consumed — reset for next round
 
         # Prepend synthesized memories when the memory bank is enabled
         if ctx.use_memory:
@@ -395,6 +451,8 @@ class Workflow:
         rounds: int = 1,
         use_memory: bool = False,
         epsilon_greedy_epsilon: float = 0.1,
+        use_reflection: bool = False,
+        reflection_model: str = "google/gemini-2.0-flash-001",
     ) -> WorkflowContext:
         """Build shared context — called by subclass ``run()`` methods."""
         if store is None:
@@ -445,6 +503,8 @@ class Workflow:
             syntax_lang=syntax_lang,
             use_memory=use_memory,
             epsilon_greedy_epsilon=epsilon_greedy_epsilon,
+            use_reflection=use_reflection,
+            reflection_model=reflection_model,
         )
 
     def _log_prompt_preview(self, ctx: WorkflowContext, solution_format: str = "code") -> None:
@@ -514,6 +574,8 @@ class SampleWorkflow(Workflow):
         syntax_lang: str = "python",
         use_memory: bool = False,
         epsilon_greedy_epsilon: float = 0.1,
+        use_reflection: bool = False,
+        reflection_model: str = "google/gemini-2.0-flash-001",
     ) -> WorkflowResult:
         """Execute the sample workflow loop and return results."""
         ctx = self._build_context(
@@ -527,6 +589,8 @@ class SampleWorkflow(Workflow):
             syntax_lang=syntax_lang, strategy=strategy, k=k, k_agg=k_agg,
             rounds=rounds, use_memory=use_memory,
             epsilon_greedy_epsilon=epsilon_greedy_epsilon,
+            use_reflection=use_reflection,
+            reflection_model=reflection_model,
         )
         self._log_prompt_preview(ctx, solution_format)
         self._execute(ctx)
@@ -538,12 +602,16 @@ class SampleWorkflow(Workflow):
         )
 
     def _execute(self, ctx: WorkflowContext) -> None:
-        # memory_step is inserted after select_step when the memory bank is on,
-        # so learnings from each round are stored before evolve_step builds the
-        # next prompt (which prepends those memories as context).
+        # Step order:
+        #   sample → evaluate → select
+        #   → [memory_step]    if use_memory
+        #   → [reflect_step]   if use_reflection  (diagnoses failures, stores brief)
+        #   → [extra_steps]
+        #   → evolve            (prepends reflection brief + memories into next prompt)
         steps: list[StepFn] = [
             sample_step, evaluate_step, select_step,
             *([memory_step] if ctx.use_memory else []),
+            *([reflect_step] if ctx.use_reflection else []),
             *self.extra_steps,
             evolve_step,
         ]

@@ -338,6 +338,8 @@ def run_loop(
     max_steps: Annotated[int, typer.Option("--max-steps", help="Max steps per agent")] = 10,
     memory: Annotated[bool, typer.Option("--memory/--no-memory", help="Enable shared memory bank — agents record and read observations, hypotheses, and learnings; sample workflow injects round learnings into subsequent prompts")] = False,
     epsilon: Annotated[float, typer.Option("--epsilon", help="Exploration probability for epsilon-greedy strategy (0.0–1.0)")] = 0.1,
+    reflection: Annotated[bool, typer.Option("--reflection/--no-reflection", help="Enable reflective mutation — an LLM diagnoses failures after each round and the brief is prepended to the next round's prompt")] = False,
+    reflection_model: Annotated[str, typer.Option("--reflection-model", help="Model used for the reflection LLM call")] = "google/gemini-2.0-flash-001",
 ) -> None:
     """Full workflow: sample → evaluate → select × N rounds, or agent mode."""
     from fanout.workflow import SampleWorkflow, LaunchWorkflow
@@ -364,6 +366,8 @@ def run_loop(
 
     if memory:
         console.print("[dim]Shared memory bank: enabled[/]")
+    if reflection:
+        console.print(f"[dim]Reflective mutation: enabled (model={reflection_model})[/]")
 
     if mode == "agent":
         wf = LaunchWorkflow()
@@ -421,6 +425,8 @@ def run_loop(
             syntax_lang=lexer,
             use_memory=memory,
             epsilon_greedy_epsilon=epsilon,
+            use_reflection=reflection,
+            reflection_model=reflection_model,
         )
 
     # Show final results
