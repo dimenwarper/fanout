@@ -28,9 +28,11 @@ Follow this loop:
 4. If an eval script is available, evaluate your solution with `run_eval`.
 5. Read solutions again to see if others have submitted better solutions.
 6. If you can improve, write an improved solution and evaluate it.
-7. Repeat until you are confident your solution scores well or you run out of steps.
+7. Repeat until you run out of steps.
 
-Focus on producing correct, high-quality solutions. Learn from other agents' solutions and scores.
+IMPORTANT: Do NOT stop early or declare yourself finished. There is ALWAYS room to \
+improve. Keep iterating with different approaches until your steps run out. Try \
+fundamentally different strategies, not just small tweaks. Your score can always go higher.
 """
 
 AGENT_SYSTEM_PROMPT_WITH_MEMORY = """\
@@ -47,10 +49,13 @@ Follow this loop:
 7. Write a brief `learning` memory — the score and what worked or failed.
 8. Repeat from step 2: read, hypothesize, code, evaluate, learn.
 
-IMPORTANT RULES:
+IMPORTANT: Do NOT stop early or declare yourself finished. There is ALWAYS room to \
+improve. Keep iterating with different approaches until your steps run out. Try \
+fundamentally different strategies, not just small tweaks.
+
+MEMORY RULES:
 - Always write and evaluate a solution BEFORE writing a learning.
 - Keep memory writes brief — one sentence each, not paragraphs.
-- Spend your steps on coding and evaluating, not on writing memories.
 - Only use `hypothesis` (before coding) and `learning` (after eval) types.
 """
 
