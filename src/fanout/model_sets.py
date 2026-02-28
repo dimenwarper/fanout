@@ -40,7 +40,7 @@ BUILTIN_SETS: dict[str, ModelSet] = {
             ModelEntry(model="moonshotai/kimi-k2-thinking"),
             ModelEntry(model="minimax/minimax-m2.5"),
             ModelEntry(model="z-ai/glm-4.7"),
-            ModelEntry(model="google/gemini-3"),
+            ModelEntry(model="google/gemini-3.1-pro-preview"),
             ModelEntry(model="openai/gpt-5.2-codex"),
             ModelEntry(model="anthropic/claude-opus-4.6"),
         ],
@@ -55,7 +55,7 @@ BUILTIN_SETS: dict[str, ModelSet] = {
     "large": ModelSet(
         name="large",
         models=[
-            ModelEntry(model="google/gemini-3"),
+            ModelEntry(model="google/gemini-3.1-pro-preview"),
             ModelEntry(model="openai/gpt-5.2-codex"),
             ModelEntry(model="anthropic/claude-opus-4.6"),
         ],
