@@ -78,6 +78,10 @@ class WorkflowContext:
     darwinian_midpoint: str | float = "p75"
     darwinian_novelty_weight: float = 1.0
 
+    # ── Epsilon-greedy strategy parameters ───────────────
+    # Only used when strategy="epsilon-greedy"; ignored by all other strategies.
+    epsilon_greedy_epsilon: float = 0.1
+
     # ── Set during loop ──────────────────────────────────
     round_num: int = 0
     current_prompt: str | list[str] = ""
@@ -150,6 +154,8 @@ def select_step(ctx: WorkflowContext) -> None:
         sharpness=ctx.darwinian_sharpness,
         midpoint=ctx.darwinian_midpoint,
         novelty_weight=ctx.darwinian_novelty_weight,
+        # Epsilon-greedy-specific kwargs — ignored by all other strategies
+        epsilon=ctx.epsilon_greedy_epsilon,
     )
     # Track how many times each solution is chosen as a parent (novelty bookkeeping)
     for s in ctx.selected:
@@ -381,6 +387,7 @@ class Workflow:
         k_agg: int = 6,
         rounds: int = 1,
         use_memory: bool = False,
+        epsilon_greedy_epsilon: float = 0.1,
     ) -> WorkflowContext:
         """Build shared context — called by subclass ``run()`` methods."""
         if store is None:
@@ -430,6 +437,7 @@ class Workflow:
             full=full,
             syntax_lang=syntax_lang,
             use_memory=use_memory,
+            epsilon_greedy_epsilon=epsilon_greedy_epsilon,
         )
 
     def _log_prompt_preview(self, ctx: WorkflowContext, solution_format: str = "code") -> None:
@@ -498,6 +506,7 @@ class SampleWorkflow(Workflow):
         console: Console | None = None,
         syntax_lang: str = "python",
         use_memory: bool = False,
+        epsilon_greedy_epsilon: float = 0.1,
     ) -> WorkflowResult:
         """Execute the sample workflow loop and return results."""
         ctx = self._build_context(
@@ -510,6 +519,7 @@ class SampleWorkflow(Workflow):
             store=store, verbose=verbose, full=full, console=console,
             syntax_lang=syntax_lang, strategy=strategy, k=k, k_agg=k_agg,
             rounds=rounds, use_memory=use_memory,
+            epsilon_greedy_epsilon=epsilon_greedy_epsilon,
         )
         self._log_prompt_preview(ctx, solution_format)
         self._execute(ctx)
