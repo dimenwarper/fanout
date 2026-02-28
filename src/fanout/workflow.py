@@ -71,6 +71,13 @@ class WorkflowContext:
     full: bool = False
     syntax_lang: str = "python"
 
+    # ── Darwinian strategy parameters ────────────────────
+    # Only used when strategy="darwinian"; ignored by all other strategies.
+    darwinian_sharpness: float = 10.0
+    # 'pNN' adaptive percentile (e.g. 'p75') or a fixed float threshold.
+    darwinian_midpoint: str | float = "p75"
+    darwinian_novelty_weight: float = 1.0
+
     # ── Set during loop ──────────────────────────────────
     round_num: int = 0
     current_prompt: str | list[str] = ""
@@ -81,6 +88,9 @@ class WorkflowContext:
     best_score: float = 0.0
     round_scores: list[float] = field(default_factory=list)
     stop: bool = False
+    # Maps solution_id → number of times selected as a parent across rounds.
+    # Used by DarwinianStrategy to apply the novelty bonus (penalise over-used parents).
+    selection_counts: dict[str, int] = field(default_factory=dict)
 
 
 StepFn = Callable[[WorkflowContext], None]
@@ -135,7 +145,16 @@ def select_step(ctx: WorkflowContext) -> None:
         ctx.strategy_name,
         ctx.store,
         k=ctx.k,
+        # Darwinian-specific kwargs — ignored by all other strategies
+        selection_counts=ctx.selection_counts,
+        sharpness=ctx.darwinian_sharpness,
+        midpoint=ctx.darwinian_midpoint,
+        novelty_weight=ctx.darwinian_novelty_weight,
     )
+    # Track how many times each solution is chosen as a parent (novelty bookkeeping)
+    for s in ctx.selected:
+        ctx.selection_counts[s.solution.id] = ctx.selection_counts.get(s.solution.id, 0) + 1
+
     top_score = ctx.selected[0].aggregate_score if ctx.selected else 0.0
     ctx.round_scores.append(top_score)
     ctx.best_score = max(ctx.best_score, top_score)
