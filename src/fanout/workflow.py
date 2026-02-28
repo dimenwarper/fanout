@@ -32,7 +32,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from fanout.db.models import Evaluation, Memory, Run, Solution, SolutionWithScores
-from fanout.evaluate import evaluate_solutions
+from fanout.evaluate import EvaluationCache, evaluate_solutions
 from fanout.launch import launch as do_launch
 from fanout.providers.openrouter import SamplingConfig
 from fanout.sample import sample as do_sample
@@ -81,6 +81,12 @@ class WorkflowContext:
     # ── Epsilon-greedy strategy parameters ───────────────
     # Only used when strategy="epsilon-greedy"; ignored by all other strategies.
     epsilon_greedy_epsilon: float = 0.1
+
+    # ── Evaluation cache ─────────────────────────────────
+    # Shared across all rounds; skips re-evaluating solutions with identical
+    # output text (e.g. parent solutions carried into a later round).
+    # Set to None to disable caching.
+    eval_cache: EvaluationCache | None = field(default_factory=EvaluationCache)
 
     # ── Set during loop ──────────────────────────────────
     round_num: int = 0
@@ -138,6 +144,7 @@ def evaluate_step(ctx: WorkflowContext) -> None:
         ctx.store,
         ctx.eval_context,
         concurrency=ctx.eval_concurrency,
+        cache=ctx.eval_cache,
     )
 
 

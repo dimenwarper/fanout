@@ -99,6 +99,7 @@ class TestEvaluateStep:
         mock_eval.assert_called_once_with(
             ctx.solutions, ctx.evaluator_names, ctx.store,
             ctx.eval_context, concurrency=ctx.eval_concurrency,
+            cache=ctx.eval_cache,
         )
 
 
@@ -188,7 +189,7 @@ class TestSampleWorkflow:
             store.save_solution(sol)
             return [sol]
 
-        def fake_eval(solutions, evaluator_names, store, context, concurrency=1):
+        def fake_eval(solutions, evaluator_names, store, context, concurrency=1, **kwargs):
             evals = []
             for sol in solutions:
                 ev = Evaluation(solution_id=sol.id, evaluator="script", score=0.6 + sol.round_num * 0.1)
@@ -227,7 +228,7 @@ class TestSampleWorkflow:
             store.save_solution(sol)
             return [sol]
 
-        def fake_eval(solutions, evaluator_names, store, context, concurrency=1):
+        def fake_eval(solutions, evaluator_names, store, context, concurrency=1, **kwargs):
             evals = []
             for sol in solutions:
                 # Score 1.0 on round 1 to trigger early stop
@@ -267,7 +268,7 @@ class TestSampleWorkflow:
             store.save_solution(sol)
             return [sol]
 
-        def fake_eval(solutions, evaluator_names, store, context, concurrency=1):
+        def fake_eval(solutions, evaluator_names, store, context, concurrency=1, **kwargs):
             evals = []
             for sol in solutions:
                 ev = Evaluation(
