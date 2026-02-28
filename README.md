@@ -14,11 +14,29 @@ In a nutshell, fanout takes a prompt, fans it out across multiple LLM models in 
 
 ## How it works
 
-There are two kinds of workflows: **Sample** and **Launch**. Both fan out work across multiple models in parallel, but they differ in how solutions are produced and refined.
+There are two kinds of workflows: **Launch** (recommended) and **Sample**. Both fan out work across multiple models in parallel, but they differ in how solutions are produced and refined.
+
+### Launch workflow (recommended)
+
+The launch workflow spawns concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a shared solution pool. This is the recommended workflow: agents naturally explore diverse strategies, learn from each other in real time, and consistently outperform the sample workflow on optimization benchmarks.
+
+<p align="center">
+  <img src="assets/launch_workflow.png" alt="Launch workflow diagram" width="700">
+</p>
+
+Each agent runs for up to `--max-steps` iterations, using tools to read the task, submit solutions, run evaluations, and inspect other agents' work.
+
+```bash
+# Launch 3 agents, each with up to 10 steps
+uv run fanout launch "Write a fast matrix multiply" \
+  -m openai/gpt-4o-mini -n 3 --max-steps 10 --eval-script ./eval.sh -v
+```
+
+Use `--mode agent` in benchmark runners to use the launch workflow.
 
 ### Sample workflow
 
-The sample workflow is a multi-round evolutionary loop. Each round samples solutions from models, evaluates them, selects the best, and uses those to seed the next generation. This is the classic map-reduce pattern applied to LLM outputs.
+The sample workflow is a multi-round evolutionary loop. Each round samples solutions from models, evaluates them, selects the best, and uses those to seed the next generation. This is the classic map-reduce pattern applied to LLM outputs. It's useful when you want fine-grained control over selection strategies, or when agents aren't needed (e.g. simple prompt optimization).
 
 <p align="center">
   <img src="assets/sampling_workflow.png" alt="Sample workflow diagram" width="700">
@@ -30,24 +48,6 @@ The sample workflow is a multi-round evolutionary loop. Each round samples solut
 2. **Evaluate:** Run every solution through a stack of evaluators — built-in (latency, cost, accuracy) or a custom eval script that tests the output for real.
 3. **Select (reduce):** A selection strategy picks the top solutions. These become the parents for the next round.
 4. **Repeat:** The loop runs for as many rounds as you want, converging on better outputs each generation.
-
-### Launch workflow
-
-The launch workflow takes a different approach: instead of externally orchestrating sample-evaluate-select rounds, it spawns concurrent **agents** that autonomously iterate on solutions. Each agent reads the prompt, writes solutions, evaluates them, reads what other agents have produced, and improves — all in a single shot.
-
-<p align="center">
-  <img src="assets/launch_workflow.png" alt="Launch workflow diagram" width="700">
-</p>
-
-Each agent runs for up to `--max-steps` iterations, using tools to read the task, submit solutions, run evaluations, and inspect other agents' work. Agents share a solution pool so they can learn from each other in real time.
-
-```bash
-# Launch 3 agents, each with up to 10 steps
-uv run fanout launch "Write a fast matrix multiply" \
-  -m openai/gpt-4o-mini -n 3 --max-steps 10 --eval-script ./eval.sh -v
-```
-
-Use `--mode agent` in benchmark runners to switch from the sample workflow to the launch workflow.
 
 ## Install
 

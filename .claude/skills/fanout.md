@@ -12,7 +12,25 @@ Run the fanout CLI to sample multiple LLMs, evaluate their outputs, and iterativ
 
 Dispatch to the appropriate subcommand based on user intent:
 
-### Full evolutionary run (sample mode)
+### Agent mode (recommended)
+```bash
+# Launch concurrent agents that iteratively improve solutions
+uv run fanout launch "YOUR PROMPT" \
+  -M coding -n 5 --max-steps 10 \
+  --eval-script ./eval.sh -v
+
+# Agent mode with shared memory bank
+uv run fanout launch "YOUR PROMPT" \
+  -M diverse -n 5 --max-steps 20 --memory \
+  --eval-script ./eval.sh -v
+
+# Agent mode via the run command (with selection strategy)
+uv run fanout run "YOUR PROMPT" --mode agent \
+  -M coding --n-agents 5 --max-steps 10 \
+  --eval-script ./eval.sh -s alphaevolve
+```
+
+### Sample mode (evolutionary loop)
 ```bash
 # Explicit models
 uv run fanout run "YOUR PROMPT" \
@@ -57,21 +75,6 @@ uv run fanout run "YOUR PROMPT" -m openai/gpt-4o-mini -n 5 -r 3 -v
 uv run fanout run "YOUR PROMPT" -m openai/gpt-4o-mini -n 5 -r 3 --full
 ```
 
-### Agent mode
-```bash
-# Launch concurrent agents that iteratively improve solutions
-uv run fanout run "YOUR PROMPT" --mode agent \
-  --n-agents 5 --max-steps 10 \
-  --eval-script ./eval.sh -s top-k -k 3
-
-# Agent mode with shared memory bank
-uv run fanout run "YOUR PROMPT" --mode agent \
-  -M coding --n-agents 5 --max-steps 10 --memory
-
-# Atomic launch (without selection)
-uv run fanout launch "YOUR PROMPT" -n 3 --max-steps 10 --eval-script ./eval.sh -v
-```
-
 ### Sample only
 ```bash
 uv run fanout sample "YOUR PROMPT" -m openai/gpt-4o-mini -n 3
@@ -111,8 +114,10 @@ uv run fanout list-model-sets
 - `-M/--model-set`: Named model set for weighted random sampling. Available: `coding`, `diverse`, `large`, `math-proving`, `small`
 
 ### Workflow mode
-- `--mode`: Workflow mode — `sample` (default) or `agent`
-- `--n-agents`: Number of concurrent agents for agent mode. Default: `3`
+- `fanout launch`: Recommended — launch concurrent agents that iterate on solutions
+- `fanout run --mode agent`: Agent mode via the run command (supports selection strategies)
+- `fanout run`: Sample mode evolutionary loop
+- `--n-agents/-n`: Number of concurrent agents. Default: `3`
 - `--max-steps`: Max iterations per agent. Default: `10`
 
 ### Sampling
