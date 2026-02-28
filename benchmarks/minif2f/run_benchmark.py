@@ -37,6 +37,69 @@ BENCHMARK_DIR = Path(__file__).resolve().parent
 EVAL_SCRIPT = str(BENCHMARK_DIR / "eval.py")
 
 TASKS = {
+    # Easy (MATHD)
+    "mathd_algebra_478": {
+        "file": "tasks/mathd_algebra_478.lean",
+        "description": "Cone volume: V = (1/3)Bh",
+        "difficulty": "MATHD",
+    },
+    "mathd_numbertheory_3": {
+        "file": "tasks/mathd_numbertheory_3.lean",
+        "description": "Units digit of sum of squares 1..9",
+        "difficulty": "MATHD",
+    },
+    "mathd_algebra_116": {
+        "file": "tasks/mathd_algebra_116.lean",
+        "description": "Find k for root of 2x^2-13x+k",
+        "difficulty": "MATHD",
+    },
+    "mathd_numbertheory_48": {
+        "file": "tasks/mathd_numbertheory_48.lean",
+        "description": "Find base b where 321_b = 57",
+        "difficulty": "MATHD",
+    },
+    "mathd_algebra_35": {
+        "file": "tasks/mathd_algebra_35.lean",
+        "description": "p(q(2)) with p(x)=2-x^2, q(x)=6/x",
+        "difficulty": "MATHD",
+    },
+    # Medium (AMC / Induction)
+    "amc12a_2013_p4": {
+        "file": "tasks/amc12a_2013_p4.lean",
+        "description": "(2^2014+2^2012)/(2^2014-2^2012) = 5/3",
+        "difficulty": "AMC",
+    },
+    "amc12b_2020_p2": {
+        "file": "tasks/amc12b_2020_p2.lean",
+        "description": "(100^2-7^2)/(70^2-11^2) simplification",
+        "difficulty": "AMC",
+    },
+    "induction_12dvd4expnp1p20": {
+        "file": "tasks/induction_12dvd4expnp1p20.lean",
+        "description": "12 divides 4^(n+1) + 20",
+        "difficulty": "AMC",
+    },
+    "amc12b_2002_p7": {
+        "file": "tasks/amc12b_2002_p7.lean",
+        "description": "Product of 3 consecutive ints = 8x their sum",
+        "difficulty": "AMC",
+    },
+    "induction_sumkexp3eqsumksq": {
+        "file": "tasks/induction_sumkexp3eqsumksq.lean",
+        "description": "Sum of cubes = square of sum",
+        "difficulty": "AMC",
+    },
+    # Hard (AIME / IMO)
+    "aime_1983_p1": {
+        "file": "tasks/aime_1983_p1.lean",
+        "description": "log_x(w)=24, log_y(w)=40, find log_z(w)",
+        "difficulty": "AIME",
+    },
+    "aime_1987_p5": {
+        "file": "tasks/aime_1987_p5.lean",
+        "description": "Find 3x^2y^2 given y^2+3x^2y^2=30x^2+517",
+        "difficulty": "AIME",
+    },
     "imo_1959_p1": {
         "file": "tasks/imo_1959_p1.lean",
         "description": "gcd(21n+4, 14n+3) = 1",
@@ -51,16 +114,6 @@ TASKS = {
         "file": "tasks/imo_1977_p6.lean",
         "description": "f(f(n)) < f(n+1) implies f = id",
         "difficulty": "IMO",
-    },
-    "imo_1990_p3": {
-        "file": "tasks/imo_1990_p3.lean",
-        "description": "n^2 | 2^n+1 implies n=3",
-        "difficulty": "IMO",
-    },
-    "mathd_algebra_478": {
-        "file": "tasks/mathd_algebra_478.lean",
-        "description": "Basic algebra (warmup)",
-        "difficulty": "MATHD",
     },
 }
 
@@ -186,8 +239,12 @@ def run_task(
 def main():
     parser = argparse.ArgumentParser(description="Run miniF2F benchmarks with fanout")
     parser.add_argument(
-        "--tasks", nargs="*", default=list(TASKS.keys()),
+        "--tasks", nargs="*", default=None,
         help=f"Tasks to run (default: all). Choices: {list(TASKS.keys())}",
+    )
+    parser.add_argument(
+        "--difficulty", "-d", nargs="*",
+        help="Filter by difficulty (MATHD, AMC, AIME, IMO). E.g. --difficulty MATHD AMC",
     )
     parser.add_argument(
         "--strategy", "-s", nargs="*", default=["top-k", "rsa"],
@@ -218,7 +275,16 @@ def main():
     results: list[dict[str, Any]] = []
     shared_store = Store()
 
-    for task_name in args.tasks:
+    # Resolve task list from --tasks and --difficulty filters
+    if args.tasks is not None:
+        task_names = args.tasks
+    elif args.difficulty:
+        diff_set = {d.upper() for d in args.difficulty}
+        task_names = [n for n, t in TASKS.items() if t["difficulty"] in diff_set]
+    else:
+        task_names = list(TASKS.keys())
+
+    for task_name in task_names:
         if task_name not in TASKS:
             console.print(f"[red]Unknown task: {task_name}[/]")
             continue
@@ -269,11 +335,18 @@ def main():
 
     console.print(table)
 
-    # Summary
-    for strat in set(r["strategy"] for r in results):
+    # Summary by strategy
+    for strat in sorted(set(r["strategy"] for r in results)):
         strat_results = [r for r in results if r["strategy"] == strat]
         solved = sum(1 for r in strat_results if r["solved"])
         console.print(f"  {strat}: {solved}/{len(strat_results)} solved")
+
+    # Summary by difficulty
+    for diff in ["MATHD", "AMC", "AIME", "IMO"]:
+        diff_results = [r for r in results if r["difficulty"] == diff]
+        if diff_results:
+            solved = sum(1 for r in diff_results if r["solved"])
+            console.print(f"  {diff}: {solved}/{len(diff_results)} solved")
 
     if args.record is not None and results:
         run_name = args.record if isinstance(args.record, str) else None

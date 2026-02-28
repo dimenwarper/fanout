@@ -1,9 +1,9 @@
-/-
-IMO 1963 Problem 5: Prove that cos(π/7) - cos(2π/7) + cos(3π/7) = 1/2.
-Source: miniF2F (https://github.com/openai/miniF2F)
--/
 import Mathlib
+import Aesop
 
-theorem imo_1963_p5 :
-    Real.cos (Real.pi / 7) - Real.cos (2 * Real.pi / 7) + Real.cos (3 * Real.pi / 7) = 1 / 2 := by
+set_option maxHeartbeats 0
+
+open BigOperators Real Nat Rat Finset Topology
+
+theorem imo_1963_p5 : Real.cos (Real.pi / 7) - Real.cos (2 * Real.pi / 7) + Real.cos (3 * Real.pi / 7) = 1 / 2 := by
   sorry

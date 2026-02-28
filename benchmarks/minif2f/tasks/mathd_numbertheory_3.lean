@@ -5,5 +5,5 @@ set_option maxHeartbeats 0
 
 open BigOperators Real Nat Rat Finset Topology
 
-theorem imo_1959_p1 : ∀ n : ℕ, Irreducible ((21 * n + 4) / (14 * n + 3)) := by
+theorem mathd_numbertheory_3 : (∑ x ∈ Finset.range 9, (x + 1) ^ 2) % 10 = 5 := by
   sorry
