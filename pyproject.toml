@@ -26,6 +26,10 @@ benchmarks = [
     "scipy>=1.12",
     "sympy>=1.12",
     "networkx>=3.2",
+    "rdkit>=2023.9",
+    "scikit-learn>=1.4",
+    "torch>=2.0",
+    "torchvision>=0.15",
 ]
 
 [project.scripts]
