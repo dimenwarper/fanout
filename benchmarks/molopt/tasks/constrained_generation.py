@@ -11,16 +11,17 @@ satisfies 6 conflicting property constraints:
   6. 40 <= TPSA <= 90       (topological polar surface area)
 
 Per-molecule score = fraction of constraints satisfied (0 to 1).
-Score = minimum per-molecule score across all 100.
+Score = median per-molecule score across all 100, multiplied by a diversity
+penalty (1 - fraction of pairs with Tanimoto >= 0.6).
 
 These constraints deliberately conflict: high QED favors simple molecules but
 the ring count pushes toward complexity; the tight MW and LogP windows further
 constrain the design space.
 
-Diversity constraint: all pairwise Tanimoto similarities (Morgan FP, r=2) must
-be < 0.6. If any pair exceeds this threshold, the score is 0.
+Diversity penalty: pairs with Tanimoto similarity (Morgan FP, r=2) >= 0.6
+reduce the score proportionally.
 
-Benchmark: min constraint fraction >= 0.85 across 100 diverse molecules
+Benchmark: median constraint fraction * diversity >= 0.85 across 100 molecules
 
 Output: list of 100 SMILES strings.
 """

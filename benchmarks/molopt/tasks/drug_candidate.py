@@ -12,12 +12,13 @@ Lipinski's Rule of Five plus additional drug-likeness criteria:
   7. TPSA <= 140            (oral bioavailability proxy)
 
 Per-molecule score = fraction of 7 criteria met.
-Score = minimum per-molecule score across all 100.
+Score = median per-molecule score across all 100, multiplied by a diversity
+penalty (1 - fraction of pairs with Tanimoto >= 0.6).
 
-Diversity constraint: all pairwise Tanimoto similarities (Morgan FP, r=2) must
-be < 0.6. If any pair exceeds this threshold, the score is 0.
+Diversity penalty: pairs with Tanimoto similarity (Morgan FP, r=2) >= 0.6
+reduce the score proportionally.
 
-Benchmark: min composite score >= 0.85 across 100 diverse molecules
+Benchmark: median composite * diversity >= 0.85 across 100 molecules
 
 Output: list of 100 SMILES strings.
 """

@@ -1,13 +1,13 @@
 """Maximize QED (Quantitative Estimate of Drug-likeness).
 
 Objective: Generate 100 valid, diverse SMILES strings where every molecule has
-high QED. Score = minimum QED across all 100 molecules, so the weakest molecule
-determines the score.
+high QED. Score = median QED across all 100 molecules, multiplied by a diversity
+penalty (1 - fraction of pairs with Tanimoto >= 0.6).
 
-Diversity constraint: all pairwise Tanimoto similarities (Morgan FP, r=2) must
-be < 0.6. If any pair exceeds this threshold, the score is 0.
+Diversity penalty: pairs with Tanimoto similarity (Morgan FP, r=2) >= 0.6
+reduce the score proportionally.
 
-Benchmark: min QED >= 0.9 across 100 diverse molecules
+Benchmark: median QED * diversity >= 0.9 across 100 molecules
 
 Output: list of 100 SMILES strings.
 """

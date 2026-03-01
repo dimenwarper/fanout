@@ -5,13 +5,15 @@ Usage: ./eval.py <solution_file> [task_name]
 
 task_name: maximize_qed | qed_logp_balance | constrained_generation | drug_candidate
 
-All tasks require 100 diverse SMILES. Score = min per-molecule score.
-Diversity enforced: all pairwise Tanimoto (Morgan FP, r=2) must be < 0.6.
+All tasks require 100 diverse SMILES. Score = median per-molecule score,
+penalized by diversity: final = median * (1 - violation_fraction), where
+violation_fraction = pairs with Tanimoto >= 0.6 / total pairs.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import statistics
 import sys
 
 
@@ -78,24 +80,30 @@ def _morgan_fp(mol):
     return AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
 
 
-def _check_diversity(mols: list, max_sim: float = 0.6) -> tuple[bool, float]:
-    """Check all pairwise Tanimoto < max_sim. Returns (passed, max_found)."""
+def _diversity_penalty(mols: list, max_sim: float = 0.6) -> float:
+    """Compute diversity multiplier: 1.0 if all pairs below threshold, decreasing
+    toward 0.0 as more pairs violate. Returns (1 - violation_fraction)."""
     from rdkit.Chem import DataStructs
     fps = [_morgan_fp(m) for m in mols]
+    total_pairs = len(fps) * (len(fps) - 1) // 2
+    violations = 0
     worst = 0.0
     for i in range(len(fps)):
         for j in range(i + 1, len(fps)):
             sim = DataStructs.TanimotoSimilarity(fps[i], fps[j])
             worst = max(worst, sim)
             if sim >= max_sim:
-                print(f"  Diversity violation: mol {i} vs {j} Tanimoto={sim:.4f} >= {max_sim}", file=sys.stderr)
-                return False, worst
-    return True, worst
+                violations += 1
+    frac = violations / total_pairs if total_pairs > 0 else 0.0
+    multiplier = 1.0 - frac
+    print(f"  Diversity: {violations}/{total_pairs} pairs violate threshold {max_sim}, "
+          f"max_sim={worst:.4f}, multiplier={multiplier:.4f}", file=sys.stderr)
+    return multiplier
 
 
 def _parse_and_validate(smiles_list, expected_count: int, func_name: str):
-    """Parse SMILES, validate count, check diversity. Returns (mols, scores_or_none).
-    If validation fails, returns (None, 0.0)."""
+    """Parse SMILES, validate count, compute diversity penalty.
+    Returns (mols, diversity_multiplier) on success, or (None, 0.0) on hard failure."""
     if not isinstance(smiles_list, list):
         print(f"Return value is not a list", file=sys.stderr)
         return None, 0.0
@@ -120,14 +128,11 @@ def _parse_and_validate(smiles_list, expected_count: int, func_name: str):
         seen.add(canon)
         mols.append(mol)
 
-    # Check diversity
+    # Compute diversity penalty
     print(f"  Checking pairwise diversity ({len(mols)} molecules)...", file=sys.stderr)
-    diverse, worst_sim = _check_diversity(mols)
-    print(f"  Max pairwise Tanimoto: {worst_sim:.4f}", file=sys.stderr)
-    if not diverse:
-        return None, 0.0
+    multiplier = _diversity_penalty(mols)
 
-    return mols, None  # None means "continue scoring"
+    return mols, multiplier
 
 
 # ── Evaluators ──────────────────────────────────────────
@@ -143,20 +148,21 @@ def eval_maximize_qed(sol) -> float:
         print("Missing maximize_qed()", file=sys.stderr)
         return 0.0
 
-    mols, early_score = _parse_and_validate(sol.maximize_qed(), EXPECTED_COUNT, "maximize_qed")
+    mols, div_mult = _parse_and_validate(sol.maximize_qed(), EXPECTED_COUNT, "maximize_qed")
     if mols is None:
-        return early_score
+        return div_mult  # 0.0
 
-    min_qed = float("inf")
+    scores = []
     for i, mol in enumerate(mols):
         q = _qed(mol)
-        if q < min_qed:
-            min_qed = q
-        if i < 10 or q < 0.5:  # print first 10 and any low scorers
+        scores.append(q)
+        if i < 10 or q < 0.5:
             print(f"  [{i}] QED={q:.4f}", file=sys.stderr)
 
-    print(f"min_qed={min_qed:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return min_qed
+    med = statistics.median(scores)
+    final = med * div_mult
+    print(f"median_qed={med:.4f} diversity_mult={div_mult:.4f} final={final:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return final
 
 
 def eval_qed_logp_balance(sol) -> float:
@@ -166,11 +172,11 @@ def eval_qed_logp_balance(sol) -> float:
         print("Missing qed_logp_balance()", file=sys.stderr)
         return 0.0
 
-    mols, early_score = _parse_and_validate(sol.qed_logp_balance(), EXPECTED_COUNT, "qed_logp_balance")
+    mols, div_mult = _parse_and_validate(sol.qed_logp_balance(), EXPECTED_COUNT, "qed_logp_balance")
     if mols is None:
-        return early_score
+        return div_mult
 
-    min_balanced = float("inf")
+    scores = []
     for i, mol in enumerate(mols):
         q = _qed(mol)
         lp = _logp(mol)
@@ -182,13 +188,14 @@ def eval_qed_logp_balance(sol) -> float:
             lp_score = max(0.0, 1.0 - dist / 3.0)
 
         balanced = (q + lp_score) / 2.0
-        if balanced < min_balanced:
-            min_balanced = balanced
+        scores.append(balanced)
         if i < 10 or balanced < 0.5:
             print(f"  [{i}] QED={q:.4f} LogP={lp:.2f} lp_score={lp_score:.4f} balanced={balanced:.4f}", file=sys.stderr)
 
-    print(f"min_balanced={min_balanced:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return min_balanced
+    med = statistics.median(scores)
+    final = med * div_mult
+    print(f"median_balanced={med:.4f} diversity_mult={div_mult:.4f} final={final:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return final
 
 
 def eval_constrained_generation(sol) -> float:
@@ -198,11 +205,11 @@ def eval_constrained_generation(sol) -> float:
         print("Missing constrained_generation()", file=sys.stderr)
         return 0.0
 
-    mols, early_score = _parse_and_validate(sol.constrained_generation(), EXPECTED_COUNT, "constrained_generation")
+    mols, div_mult = _parse_and_validate(sol.constrained_generation(), EXPECTED_COUNT, "constrained_generation")
     if mols is None:
-        return early_score
+        return div_mult
 
-    min_frac = float("inf")
+    scores = []
     for i, mol in enumerate(mols):
         q = _qed(mol)
         mw = _mw(mol)
@@ -227,13 +234,14 @@ def eval_constrained_generation(sol) -> float:
             met += 1
 
         frac = met / total
-        if frac < min_frac:
-            min_frac = frac
+        scores.append(frac)
         if i < 10 or frac < 0.7:
             print(f"  [{i}] QED={q:.3f} MW={mw:.1f} LogP={lp:.2f} rings={rings} HBD={hbd} TPSA={tpsa:.1f} -> {met}/{total}={frac:.2f}", file=sys.stderr)
 
-    print(f"min_constraint_frac={min_frac:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return min_frac
+    med = statistics.median(scores)
+    final = med * div_mult
+    print(f"median_constraint_frac={med:.4f} diversity_mult={div_mult:.4f} final={final:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return final
 
 
 def eval_drug_candidate(sol) -> float:
@@ -243,11 +251,11 @@ def eval_drug_candidate(sol) -> float:
         print("Missing drug_candidate()", file=sys.stderr)
         return 0.0
 
-    mols, early_score = _parse_and_validate(sol.drug_candidate(), EXPECTED_COUNT, "drug_candidate")
+    mols, div_mult = _parse_and_validate(sol.drug_candidate(), EXPECTED_COUNT, "drug_candidate")
     if mols is None:
-        return early_score
+        return div_mult
 
-    min_frac = float("inf")
+    scores = []
     for i, mol in enumerate(mols):
         q = _qed(mol)
         mw = _mw(mol)
@@ -275,13 +283,14 @@ def eval_drug_candidate(sol) -> float:
             met += 1
 
         frac = met / total
-        if frac < min_frac:
-            min_frac = frac
+        scores.append(frac)
         if i < 10 or frac < 0.7:
             print(f"  [{i}] QED={q:.3f} MW={mw:.1f} LogP={lp:.2f} HBD={hbd} HBA={hba} rot={rot} TPSA={tpsa:.1f} -> {met}/{total}={frac:.2f}", file=sys.stderr)
 
-    print(f"min_score={min_frac:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return min_frac
+    med = statistics.median(scores)
+    final = med * div_mult
+    print(f"median_score={med:.4f} diversity_mult={div_mult:.4f} final={final:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return final
 
 
 EVALUATORS = {

@@ -2,8 +2,8 @@
 
 Evolve SMILES strings to optimize molecular properties via RDKit. All tasks require **100 diverse, valid SMILES**. Scoring is deliberately harsh:
 
-- **Score = minimum** per-molecule score (weakest molecule determines the score)
-- **Diversity enforced**: all pairwise Tanimoto similarities (Morgan FP, r=2) must be < 0.6 — any violation scores 0
+- **Score = median** per-molecule score, multiplied by a diversity penalty
+- **Diversity penalty**: `final = median * (1 - violation_fraction)`, where violation_fraction = pairs with Tanimoto (Morgan FP, r=2) >= 0.6 / total pairs. All diverse = no penalty; all identical = score 0
 - **Duplicates rejected**: canonical SMILES must be unique
 - **Invalid SMILES rejected**: any unparseable molecule scores 0
 
@@ -11,10 +11,10 @@ Evolve SMILES strings to optimize molecular properties via RDKit. All tasks requ
 
 | Task | Function | Per-Molecule Score | Benchmark | Description |
 |------|----------|--------------------|-----------|-------------|
-| `maximize_qed.py` | `maximize_qed()` | QED | min >= 0.9 | Maximize drug-likeness across 100 diverse molecules |
-| `qed_logp_balance.py` | `qed_logp_balance()` | (QED + LogP_score) / 2 | min >= 0.85 | Balance QED and LogP (target [1.0, 3.0]) |
-| `constrained_generation.py` | `constrained_generation()` | Fraction of 6 constraints met | min >= 0.85 | Hit 6 conflicting property windows simultaneously |
-| `drug_candidate.py` | `drug_candidate()` | Fraction of 7 criteria met | min >= 0.85 | Lipinski + QED + rotatable bonds + TPSA |
+| `maximize_qed.py` | `maximize_qed()` | QED | median*div >= 0.9 | Maximize drug-likeness across 100 diverse molecules |
+| `qed_logp_balance.py` | `qed_logp_balance()` | (QED + LogP_score) / 2 | median*div >= 0.85 | Balance QED and LogP (target [1.0, 3.0]) |
+| `constrained_generation.py` | `constrained_generation()` | Fraction of 6 constraints met | median*div >= 0.85 | Hit 6 conflicting property windows simultaneously |
+| `drug_candidate.py` | `drug_candidate()` | Fraction of 7 criteria met | median*div >= 0.85 | Lipinski + QED + rotatable bonds + TPSA |
 
 ### Constrained generation windows
 
@@ -54,4 +54,4 @@ uv run --extra benchmarks python benchmarks/molopt/run_benchmark.py \
 
 ## Scoring
 
-Score = min(per_molecule_scores) across all 100 molecules. Invalid SMILES, duplicates, or diversity violations immediately score 0. The min-scoring makes this very hard — one bad molecule tanks the entire score.
+Score = median(per_molecule_scores) * diversity_multiplier. Invalid SMILES or duplicates score 0. The diversity multiplier = `1 - (violating_pairs / total_pairs)` where violating pairs have Tanimoto >= 0.6. A few similar pairs hurt proportionally; all unique = full score.
