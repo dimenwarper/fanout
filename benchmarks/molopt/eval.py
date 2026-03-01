@@ -3,16 +3,15 @@
 
 Usage: ./eval.py <solution_file> [task_name]
 
-task_name: maximize_qed | qed_logp_balance | aspirin_rediscovery | drug_candidate
+task_name: maximize_qed | qed_logp_balance | constrained_generation | drug_candidate
 
-The solution file must define the task's entry function.
-Prints the score on the last line.
+All tasks require 100 diverse SMILES. Score = min per-molecule score.
+Diversity enforced: all pairwise Tanimoto (Morgan FP, r=2) must be < 0.6.
 """
 
 from __future__ import annotations
 
 import importlib.util
-import math
 import sys
 
 
@@ -26,13 +25,11 @@ def load_module(path: str):
 # ── Helpers ──────────────────────────────────────────
 
 def _safe_mol(smiles: str):
-    """Parse SMILES, return Mol or None."""
     from rdkit import Chem
     if not isinstance(smiles, str):
         return None
     try:
-        mol = Chem.MolFromSmiles(smiles)
-        return mol
+        return Chem.MolFromSmiles(smiles)
     except Exception:
         return None
 
@@ -62,74 +59,122 @@ def _hba(mol):
     return Descriptors.NumHAcceptors(mol)
 
 
-def _tanimoto(mol, ref_mol):
-    from rdkit.Chem import AllChem, DataStructs
-    fp1 = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
-    fp2 = AllChem.GetMorganFingerprintAsBitVect(ref_mol, 2, nBits=2048)
-    return DataStructs.TanimotoSimilarity(fp1, fp2)
+def _tpsa(mol):
+    from rdkit.Chem import Descriptors
+    return Descriptors.TPSA(mol)
+
+
+def _num_rings(mol):
+    return mol.GetRingInfo().NumRings()
+
+
+def _num_rotatable_bonds(mol):
+    from rdkit.Chem import Descriptors
+    return Descriptors.NumRotatableBonds(mol)
+
+
+def _morgan_fp(mol):
+    from rdkit.Chem import AllChem
+    return AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+
+
+def _check_diversity(mols: list, max_sim: float = 0.6) -> tuple[bool, float]:
+    """Check all pairwise Tanimoto < max_sim. Returns (passed, max_found)."""
+    from rdkit.Chem import DataStructs
+    fps = [_morgan_fp(m) for m in mols]
+    worst = 0.0
+    for i in range(len(fps)):
+        for j in range(i + 1, len(fps)):
+            sim = DataStructs.TanimotoSimilarity(fps[i], fps[j])
+            worst = max(worst, sim)
+            if sim >= max_sim:
+                print(f"  Diversity violation: mol {i} vs {j} Tanimoto={sim:.4f} >= {max_sim}", file=sys.stderr)
+                return False, worst
+    return True, worst
+
+
+def _parse_and_validate(smiles_list, expected_count: int, func_name: str):
+    """Parse SMILES, validate count, check diversity. Returns (mols, scores_or_none).
+    If validation fails, returns (None, 0.0)."""
+    if not isinstance(smiles_list, list):
+        print(f"Return value is not a list", file=sys.stderr)
+        return None, 0.0
+
+    if len(smiles_list) < expected_count:
+        print(f"Only {len(smiles_list)} SMILES, need {expected_count}", file=sys.stderr)
+        return None, 0.0
+
+    # Deduplicate by canonical SMILES
+    from rdkit import Chem
+    seen = set()
+    mols = []
+    for i, smi in enumerate(smiles_list[:expected_count]):
+        mol = _safe_mol(smi)
+        if mol is None:
+            print(f"  [{i}] Invalid SMILES: {smi!r}", file=sys.stderr)
+            return None, 0.0
+        canon = Chem.MolToSmiles(mol)
+        if canon in seen:
+            print(f"  [{i}] Duplicate molecule: {smi!r} (canonical: {canon})", file=sys.stderr)
+            return None, 0.0
+        seen.add(canon)
+        mols.append(mol)
+
+    # Check diversity
+    print(f"  Checking pairwise diversity ({len(mols)} molecules)...", file=sys.stderr)
+    diverse, worst_sim = _check_diversity(mols)
+    print(f"  Max pairwise Tanimoto: {worst_sim:.4f}", file=sys.stderr)
+    if not diverse:
+        return None, 0.0
+
+    return mols, None  # None means "continue scoring"
 
 
 # ── Evaluators ──────────────────────────────────────────
 
+EXPECTED_COUNT = 100
+MAX_SIMILARITY = 0.6
+
 
 def eval_maximize_qed(sol) -> float:
     BENCHMARK = 0.9
-    EXPECTED_COUNT = 10
 
     if not hasattr(sol, "maximize_qed"):
         print("Missing maximize_qed()", file=sys.stderr)
         return 0.0
 
-    smiles_list = sol.maximize_qed()
-    if not isinstance(smiles_list, list):
-        print("Return value is not a list", file=sys.stderr)
-        return 0.0
+    mols, early_score = _parse_and_validate(sol.maximize_qed(), EXPECTED_COUNT, "maximize_qed")
+    if mols is None:
+        return early_score
 
-    scores = []
-    for i, smi in enumerate(smiles_list[:EXPECTED_COUNT]):
-        mol = _safe_mol(smi)
-        if mol is None:
-            print(f"  [{i}] Invalid SMILES: {smi!r}", file=sys.stderr)
-            scores.append(0.0)
-        else:
-            q = _qed(mol)
-            scores.append(q)
-            print(f"  [{i}] {smi} -> QED={q:.4f}", file=sys.stderr)
+    min_qed = float("inf")
+    for i, mol in enumerate(mols):
+        q = _qed(mol)
+        if q < min_qed:
+            min_qed = q
+        if i < 10 or q < 0.5:  # print first 10 and any low scorers
+            print(f"  [{i}] QED={q:.4f}", file=sys.stderr)
 
-    # Penalize if fewer molecules than expected
-    while len(scores) < EXPECTED_COUNT:
-        scores.append(0.0)
-
-    avg = sum(scores) / EXPECTED_COUNT
-    print(f"avg_qed={avg:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return avg
+    print(f"min_qed={min_qed:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return min_qed
 
 
 def eval_qed_logp_balance(sol) -> float:
     BENCHMARK = 0.85
-    EXPECTED_COUNT = 10
 
     if not hasattr(sol, "qed_logp_balance"):
         print("Missing qed_logp_balance()", file=sys.stderr)
         return 0.0
 
-    smiles_list = sol.qed_logp_balance()
-    if not isinstance(smiles_list, list):
-        print("Return value is not a list", file=sys.stderr)
-        return 0.0
+    mols, early_score = _parse_and_validate(sol.qed_logp_balance(), EXPECTED_COUNT, "qed_logp_balance")
+    if mols is None:
+        return early_score
 
-    scores = []
-    for i, smi in enumerate(smiles_list[:EXPECTED_COUNT]):
-        mol = _safe_mol(smi)
-        if mol is None:
-            print(f"  [{i}] Invalid SMILES: {smi!r}", file=sys.stderr)
-            scores.append(0.0)
-            continue
-
+    min_balanced = float("inf")
+    for i, mol in enumerate(mols):
         q = _qed(mol)
         lp = _logp(mol)
 
-        # LogP penalty: 1.0 if in [1,3], decay outside
         if 1.0 <= lp <= 3.0:
             lp_score = 1.0
         else:
@@ -137,111 +182,112 @@ def eval_qed_logp_balance(sol) -> float:
             lp_score = max(0.0, 1.0 - dist / 3.0)
 
         balanced = (q + lp_score) / 2.0
-        scores.append(balanced)
-        print(f"  [{i}] {smi} -> QED={q:.4f} LogP={lp:.2f} lp_score={lp_score:.4f} balanced={balanced:.4f}", file=sys.stderr)
+        if balanced < min_balanced:
+            min_balanced = balanced
+        if i < 10 or balanced < 0.5:
+            print(f"  [{i}] QED={q:.4f} LogP={lp:.2f} lp_score={lp_score:.4f} balanced={balanced:.4f}", file=sys.stderr)
 
-    while len(scores) < EXPECTED_COUNT:
-        scores.append(0.0)
-
-    avg = sum(scores) / EXPECTED_COUNT
-    print(f"avg_balanced={avg:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return avg
+    print(f"min_balanced={min_balanced:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return min_balanced
 
 
-def eval_aspirin_rediscovery(sol) -> float:
-    from rdkit import Chem
+def eval_constrained_generation(sol) -> float:
+    BENCHMARK = 0.85
 
-    BENCHMARK = 0.95
-    EXPECTED_COUNT = 5
-    ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
-
-    if not hasattr(sol, "aspirin_rediscovery"):
-        print("Missing aspirin_rediscovery()", file=sys.stderr)
+    if not hasattr(sol, "constrained_generation"):
+        print("Missing constrained_generation()", file=sys.stderr)
         return 0.0
 
-    smiles_list = sol.aspirin_rediscovery()
-    if not isinstance(smiles_list, list):
-        print("Return value is not a list", file=sys.stderr)
-        return 0.0
+    mols, early_score = _parse_and_validate(sol.constrained_generation(), EXPECTED_COUNT, "constrained_generation")
+    if mols is None:
+        return early_score
 
-    ref_mol = Chem.MolFromSmiles(ASPIRIN_SMILES)
+    min_frac = float("inf")
+    for i, mol in enumerate(mols):
+        q = _qed(mol)
+        mw = _mw(mol)
+        lp = _logp(mol)
+        rings = _num_rings(mol)
+        hbd = _hbd(mol)
+        tpsa = _tpsa(mol)
 
-    scores = []
-    for i, smi in enumerate(smiles_list[:EXPECTED_COUNT]):
-        mol = _safe_mol(smi)
-        if mol is None:
-            print(f"  [{i}] Invalid SMILES: {smi!r}", file=sys.stderr)
-            scores.append(0.0)
-            continue
+        total = 6
+        met = 0
+        if q >= 0.75:
+            met += 1
+        if 250 <= mw <= 400:
+            met += 1
+        if 1.5 <= lp <= 3.5:
+            met += 1
+        if 2 <= rings <= 4:
+            met += 1
+        if hbd <= 3:
+            met += 1
+        if 40 <= tpsa <= 90:
+            met += 1
 
-        sim = _tanimoto(mol, ref_mol)
-        scores.append(sim)
-        print(f"  [{i}] {smi} -> Tanimoto={sim:.4f}", file=sys.stderr)
+        frac = met / total
+        if frac < min_frac:
+            min_frac = frac
+        if i < 10 or frac < 0.7:
+            print(f"  [{i}] QED={q:.3f} MW={mw:.1f} LogP={lp:.2f} rings={rings} HBD={hbd} TPSA={tpsa:.1f} -> {met}/{total}={frac:.2f}", file=sys.stderr)
 
-    while len(scores) < EXPECTED_COUNT:
-        scores.append(0.0)
-
-    avg = sum(scores) / EXPECTED_COUNT
-    print(f"avg_tanimoto={avg:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return avg
+    print(f"min_constraint_frac={min_frac:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return min_frac
 
 
 def eval_drug_candidate(sol) -> float:
-    BENCHMARK = 0.80
-    EXPECTED_COUNT = 10
+    BENCHMARK = 0.85
 
     if not hasattr(sol, "drug_candidate"):
         print("Missing drug_candidate()", file=sys.stderr)
         return 0.0
 
-    smiles_list = sol.drug_candidate()
-    if not isinstance(smiles_list, list):
-        print("Return value is not a list", file=sys.stderr)
-        return 0.0
+    mols, early_score = _parse_and_validate(sol.drug_candidate(), EXPECTED_COUNT, "drug_candidate")
+    if mols is None:
+        return early_score
 
-    scores = []
-    for i, smi in enumerate(smiles_list[:EXPECTED_COUNT]):
-        mol = _safe_mol(smi)
-        if mol is None:
-            print(f"  [{i}] Invalid SMILES: {smi!r}", file=sys.stderr)
-            scores.append(0.0)
-            continue
-
+    min_frac = float("inf")
+    for i, mol in enumerate(mols):
         q = _qed(mol)
-        lp = _logp(mol)
         mw = _mw(mol)
+        lp = _logp(mol)
         hbd = _hbd(mol)
         hba = _hba(mol)
+        rot = _num_rotatable_bonds(mol)
+        tpsa = _tpsa(mol)
 
-        criteria_met = 0
-        total_criteria = 5
-        if q >= 0.6:
-            criteria_met += 1
-        if 150 <= mw <= 500:
-            criteria_met += 1
+        total = 7
+        met = 0
+        if q >= 0.7:
+            met += 1
+        if 200 <= mw <= 500:
+            met += 1
         if 0 <= lp <= 5:
-            criteria_met += 1
+            met += 1
         if hbd <= 5:
-            criteria_met += 1
+            met += 1
         if hba <= 10:
-            criteria_met += 1
+            met += 1
+        if rot <= 10:
+            met += 1
+        if tpsa <= 140:
+            met += 1
 
-        frac = criteria_met / total_criteria
-        scores.append(frac)
-        print(f"  [{i}] {smi} -> QED={q:.3f} MW={mw:.1f} LogP={lp:.2f} HBD={hbd} HBA={hba} score={frac:.2f}", file=sys.stderr)
+        frac = met / total
+        if frac < min_frac:
+            min_frac = frac
+        if i < 10 or frac < 0.7:
+            print(f"  [{i}] QED={q:.3f} MW={mw:.1f} LogP={lp:.2f} HBD={hbd} HBA={hba} rot={rot} TPSA={tpsa:.1f} -> {met}/{total}={frac:.2f}", file=sys.stderr)
 
-    while len(scores) < EXPECTED_COUNT:
-        scores.append(0.0)
-
-    avg = sum(scores) / EXPECTED_COUNT
-    print(f"avg_score={avg:.4f} benchmark={BENCHMARK}", file=sys.stderr)
-    return avg
+    print(f"min_score={min_frac:.4f} benchmark={BENCHMARK}", file=sys.stderr)
+    return min_frac
 
 
 EVALUATORS = {
     "maximize_qed": eval_maximize_qed,
     "qed_logp_balance": eval_qed_logp_balance,
-    "aspirin_rediscovery": eval_aspirin_rediscovery,
+    "constrained_generation": eval_constrained_generation,
     "drug_candidate": eval_drug_candidate,
 }
 

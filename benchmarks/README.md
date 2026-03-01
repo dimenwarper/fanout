@@ -9,7 +9,7 @@ Curated benchmarks for evaluating fanout strategies (especially RSA) against pub
 | [kernelbench/](kernelbench/) | CUDA kernel optimization | Correctness + speedup (0.0-1.0) | CUDA GPU + PyTorch | 5 |
 | [codeevolve/](codeevolve/) | Algorithm discovery | benchmark_ratio vs AlphaEvolve (0.0-1.0) | Python + NumPy | 4 |
 | [minif2f/](minif2f/) | Formal theorem proving | Binary pass/fail (0.0 or 1.0) | Lean 4 + Mathlib | 5 |
-| [molopt/](molopt/) | Molecular optimization | Avg property score (0.0-1.0) | Python + RDKit | 4 |
+| [molopt/](molopt/) | Molecular optimization | Min property score, diversity-enforced (0.0-1.0) | Python + RDKit | 4 |
 | [mnist-weights/](mnist-weights/) | Raw neural network weights | Test accuracy (0.0-1.0) | Python + scikit-learn | 4 |
 | [cifar10-weightgen/](cifar10-weightgen/) | CNN weight generation | Test accuracy (0.0-1.0) | Python + PyTorch | 3 |
 

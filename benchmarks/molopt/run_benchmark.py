@@ -41,26 +41,26 @@ TASKS = {
     "maximize_qed": {
         "file": "tasks/maximize_qed.py",
         "function": "maximize_qed",
-        "description": "Generate 10 SMILES with maximum average QED",
+        "description": "100 diverse SMILES, score = min QED (weakest molecule)",
         "benchmark": 0.9,
     },
     "qed_logp_balance": {
         "file": "tasks/qed_logp_balance.py",
         "function": "qed_logp_balance",
-        "description": "Balance QED and LogP across 10 SMILES",
+        "description": "100 diverse SMILES, score = min balanced QED+LogP",
         "benchmark": 0.85,
     },
-    "aspirin_rediscovery": {
-        "file": "tasks/aspirin_rediscovery.py",
-        "function": "aspirin_rediscovery",
-        "description": "Rediscover Aspirin via Tanimoto similarity (5 SMILES)",
-        "benchmark": 0.95,
+    "constrained_generation": {
+        "file": "tasks/constrained_generation.py",
+        "function": "constrained_generation",
+        "description": "100 diverse SMILES hitting 6 conflicting property windows",
+        "benchmark": 0.85,
     },
     "drug_candidate": {
         "file": "tasks/drug_candidate.py",
         "function": "drug_candidate",
-        "description": "Multi-objective drug candidate optimization (10 SMILES)",
-        "benchmark": 0.80,
+        "description": "100 diverse SMILES satisfying 7 drug-likeness criteria",
+        "benchmark": 0.85,
     },
 }
 
