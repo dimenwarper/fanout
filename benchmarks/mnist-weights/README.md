@@ -47,6 +47,15 @@ uv run --extra benchmarks python benchmarks/mnist-weights/run_benchmark.py \
   --record my-run
 ```
 
+## Anti-Cheat
+
+Solutions must produce raw weight numbers directly — no training allowed:
+
+- **Static analysis**: importing ML frameworks (sklearn, torch, tensorflow, keras, jax, etc.) or calling `.fit()` / `.train()` / `.backward()` is detected and scores 0 with an explanatory error
+- **Time limit**: function must return within 2 seconds (returning numpy arrays takes milliseconds; training takes orders of magnitude longer)
+
+Only `numpy` is allowed. The LLM must reason about digit pixel patterns and encode that knowledge directly into weight values.
+
 ## Scoring
 
 Score is test accuracy (0 to 1). The forward pass is pure numpy — no frameworks needed in the solution. Weight dict must have keys `W1`, `b1`, `W2`, `b2` with correct shapes.

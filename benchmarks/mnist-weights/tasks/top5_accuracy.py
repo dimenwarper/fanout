@@ -10,6 +10,12 @@ Architecture: 64 -> 16 (ReLU) -> 10  (1,210 parameters)
 Benchmark: top-5 test accuracy >= 0.85
 
 Output: dict with keys "W1", "b1", "W2", "b2" as numpy arrays.
+
+IMPORTANT: You must produce the weight numbers directly — no training allowed.
+Importing ML frameworks (sklearn, torch, tensorflow, etc.) or calling .fit()
+will be detected and score 0. A 2-second time limit is also enforced.
+Only numpy is allowed. Think about what pixel patterns distinguish each digit
+and encode that knowledge directly into the weight values.
 """
 
 import numpy as np

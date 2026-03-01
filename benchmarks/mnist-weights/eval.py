@@ -7,16 +7,120 @@ task_name: classify_all | binary_0v1 | binary_3v8 | top5_accuracy
 
 The solution file must define the task's entry function returning a weight dict.
 Prints the accuracy score on the last line.
+
+Anti-cheat: solutions must produce raw weight numbers directly — no training
+allowed. Banned imports (sklearn, torch, tensorflow, etc.) and .fit() calls
+are detected via static analysis, and a 2-second time limit is enforced.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import re
+import signal
 import sys
+import time
 
 import numpy as np
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
+
+# ── Anti-cheat ──────────────────────────────────────────
+
+BANNED_IMPORTS = [
+    r'^\s*(?:from|import)\s+sklearn\b',
+    r'^\s*(?:from|import)\s+torch\b',
+    r'^\s*(?:from|import)\s+tensorflow\b',
+    r'^\s*(?:from|import)\s+keras\b',
+    r'^\s*(?:from|import)\s+jax\b',
+    r'^\s*(?:from|import)\s+flax\b',
+    r'^\s*(?:from|import)\s+xgboost\b',
+    r'^\s*(?:from|import)\s+lightgbm\b',
+    r'^\s*(?:from|import)\s+catboost\b',
+]
+
+BANNED_PATTERNS = [
+    r'\.fit\s*\(',
+    r'\.train\s*\(',
+    r'\.backward\s*\(',
+    r'optimizer\.step\s*\(',
+    r'\.compile\s*\(',
+]
+
+FUNC_TIME_LIMIT = 2.0  # seconds
+
+
+def _strip_comments_and_strings(source: str) -> str:
+    """Remove comments, docstrings, and string literals to check only real code."""
+    # Remove triple-quoted strings (docstrings)
+    source = re.sub(r'"""[\s\S]*?"""', '', source)
+    source = re.sub(r"'''[\s\S]*?'''", '', source)
+    # Remove single-quoted and double-quoted strings
+    source = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', '', source)
+    source = re.sub(r"'[^'\\]*(?:\\.[^'\\]*)*'", '', source)
+    # Remove line comments
+    source = re.sub(r'#.*$', '', source, flags=re.MULTILINE)
+    return source
+
+
+def _check_source(path: str) -> str | None:
+    """Scan source for banned imports/patterns. Returns error message or None."""
+    try:
+        with open(path) as f:
+            source = f.read()
+    except Exception:
+        return None  # can't read, let load_module handle it
+
+    code_only = _strip_comments_and_strings(source)
+
+    for pattern in BANNED_IMPORTS:
+        if re.search(pattern, code_only, re.MULTILINE):
+            return (
+                f"CHEATING DETECTED: source contains banned import matching '{pattern}'. "
+                f"This benchmark requires you to produce raw weight numbers directly "
+                f"(numpy arrays of floats). You may NOT import or use any ML framework "
+                f"(sklearn, torch, tensorflow, etc.) to train a model. "
+                f"Think about what patterns distinguish the digits and encode that "
+                f"knowledge directly into the weight values."
+            )
+
+    for pattern in BANNED_PATTERNS:
+        if re.search(pattern, code_only):
+            return (
+                f"CHEATING DETECTED: source contains banned pattern matching '{pattern}'. "
+                f"This benchmark requires you to produce raw weight numbers directly — "
+                f"no training, fitting, or optimization loops allowed. "
+                f"You must craft the weight values yourself using mathematical reasoning "
+                f"about digit patterns."
+            )
+
+    return None
+
+
+class _TimeoutError(Exception):
+    pass
+
+
+def _call_with_timeout(func, timeout: float):
+    """Call func() with a wall-clock time limit."""
+    def _handler(signum, frame):
+        raise _TimeoutError()
+
+    old_handler = signal.signal(signal.SIGALRM, _handler)
+    signal.setitimer(signal.ITIMER_REAL, timeout)
+    try:
+        result = func()
+    except _TimeoutError:
+        raise RuntimeError(
+            f"CHEATING DETECTED: function took longer than {timeout}s. "
+            f"This benchmark requires you to produce raw weight numbers directly — "
+            f"no training or optimization loops allowed. Your function should just "
+            f"return numpy arrays of pre-computed float values, which takes milliseconds."
+        )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+    return result
 
 
 def load_module(path: str):
@@ -110,7 +214,11 @@ def eval_classify_all(sol) -> float:
         print("Missing classify_all()", file=sys.stderr)
         return 0.0
 
-    weights = sol.classify_all()
+    try:
+        weights = _call_with_timeout(sol.classify_all, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
     if not _validate_weights(weights, ["W1", "b1", "W2", "b2"]):
         return 0.0
 
@@ -135,7 +243,11 @@ def eval_binary_0v1(sol) -> float:
         print("Missing binary_0v1()", file=sys.stderr)
         return 0.0
 
-    weights = sol.binary_0v1()
+    try:
+        weights = _call_with_timeout(sol.binary_0v1, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
     if not _validate_weights(weights, ["W1", "b1", "W2", "b2"]):
         return 0.0
 
@@ -160,7 +272,11 @@ def eval_binary_3v8(sol) -> float:
         print("Missing binary_3v8()", file=sys.stderr)
         return 0.0
 
-    weights = sol.binary_3v8()
+    try:
+        weights = _call_with_timeout(sol.binary_3v8, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
     if not _validate_weights(weights, ["W1", "b1", "W2", "b2"]):
         return 0.0
 
@@ -185,7 +301,11 @@ def eval_top5_accuracy(sol) -> float:
         print("Missing top5_accuracy()", file=sys.stderr)
         return 0.0
 
-    weights = sol.top5_accuracy()
+    try:
+        weights = _call_with_timeout(sol.top5_accuracy, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
     if not _validate_weights(weights, ["W1", "b1", "W2", "b2"]):
         return 0.0
 
@@ -221,6 +341,13 @@ def main():
 
     solution_path = sys.argv[1]
     task_name = sys.argv[2] if len(sys.argv) > 2 else "classify_all"
+
+    # Static analysis: check for banned imports/patterns
+    cheat_msg = _check_source(solution_path)
+    if cheat_msg:
+        print(cheat_msg, file=sys.stderr)
+        print("0.0")
+        sys.exit(0)
 
     try:
         sol = load_module(solution_path)
