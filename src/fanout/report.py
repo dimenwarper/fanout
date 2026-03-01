@@ -126,14 +126,32 @@ async def generate_summary(
         return data["choices"][0]["message"]["content"]
 
 
-def _build_scores_csv(results: list[dict[str, Any]]) -> str:
-    """Build a CSV with step, task, strategy, max_score columns."""
+def _build_scores_csv(results: list[dict[str, Any]], store: Store | None = None) -> str:
+    """Build a CSV with step, task, strategy, max_score columns.
+
+    For launch/agent mode, solutions are ordered by submission time so
+    the CSV shows a proper progression instead of a single step.
+    """
     buf = StringIO()
     writer = csv.writer(buf)
     writer.writerow(["step", "task", "strategy", "max_score"])
     for r in results:
         task = r.get("task", "task")
         strategy = r.get("strategy", "unknown")
+        mode = r.get("mode", "sample")
+
+        if mode == "agent" and store is not None:
+            # Pull solutions sorted by submission time for proper progression
+            scored = store.get_solutions_with_scores(r["run_id"])
+            if scored:
+                by_time = sorted(scored, key=lambda s: s.solution.created_at)
+                running_max = 0.0
+                for step, sw in enumerate(by_time, 1):
+                    running_max = max(running_max, sw.aggregate_score)
+                    writer.writerow([step, task, strategy, f"{running_max:.4f}"])
+                continue
+
+        # Sample mode: use round_scores as before
         running_max = 0.0
         for step, score in enumerate(r.get("round_scores", []), 1):
             running_max = max(running_max, score)
@@ -185,7 +203,7 @@ def save_record(
     (run_dir / "results.json").write_text(json.dumps(results, indent=2))
 
     # scores.csv — step-by-step max score progression
-    (run_dir / "scores.csv").write_text(_build_scores_csv(results))
+    (run_dir / "scores.csv").write_text(_build_scores_csv(results, store=store))
 
     # solutions/
     sol_dir = run_dir / "solutions"
