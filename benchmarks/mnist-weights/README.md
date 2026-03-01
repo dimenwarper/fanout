@@ -51,8 +51,8 @@ uv run --extra benchmarks python benchmarks/mnist-weights/run_benchmark.py \
 
 Solutions must produce raw weight numbers directly — no training allowed:
 
-- **Static analysis**: importing ML frameworks (sklearn, torch, tensorflow, keras, jax, etc.) or calling `.fit()` / `.train()` / `.backward()` is detected and scores 0 with an explanatory error
-- **Time limit**: function must return within 2 seconds (returning numpy arrays takes milliseconds; training takes orders of magnitude longer)
+- **Static analysis**: importing ML frameworks (sklearn, torch, tensorflow, keras, jax, etc.), calling `.fit()` / `.train()` / `.backward()`, dynamic imports (`__import__`, `importlib`), and loading the eval dataset (`load_digits`) are all detected and score 0 with an explanatory error
+- **Time limit**: function must return within 0.5 seconds (returning numpy arrays takes milliseconds; training loops will timeout)
 
 Only `numpy` is allowed. The LLM must reason about digit pixel patterns and encode that knowledge directly into weight values.
 

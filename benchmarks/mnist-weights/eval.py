@@ -45,9 +45,14 @@ BANNED_PATTERNS = [
     r'\.backward\s*\(',
     r'optimizer\.step\s*\(',
     r'\.compile\s*\(',
+    r'__import__\s*\(',           # dynamic imports to dodge static analysis
+    r'importlib',                  # dynamic imports via importlib
+    r'load_digits',               # no accessing the eval dataset
+    r'load_iris',                 # no loading any sklearn datasets
+    r'fetch_',                    # no fetching datasets
 ]
 
-FUNC_TIME_LIMIT = 2.0  # seconds
+FUNC_TIME_LIMIT = 0.5  # seconds — returning numpy arrays is instant
 
 
 def _strip_comments_and_strings(source: str) -> str:
