@@ -4,17 +4,17 @@ The LLM writes raw float weights for a tiny MLP that classifies sklearn's 8x8 di
 
 ## Architecture
 
-- **10-class tasks**: `64 → 16 (ReLU) → 10` — 1,210 parameters
-- **Binary tasks**: `64 → 8 (ReLU) → 1 (sigmoid)` — 529 parameters
+- **10-class tasks**: `64 → 13 (ELU) → 10` — 1,072 parameters
+- **Binary tasks**: `64 → 7 (ELU) → 1 (sigmoid)` — 462 parameters
 
 ## Tasks
 
 | Task | Function | Architecture | Benchmark | Description |
 |------|----------|-------------|-----------|-------------|
-| `classify_all.py` | `classify_all()` | 64→16→10 | accuracy >= 0.50 | 10-class digit classification |
-| `binary_0v1.py` | `binary_0v1()` | 64→8→1 | accuracy >= 0.90 | Classify 0 vs 1 (easy pair) |
-| `binary_3v8.py` | `binary_3v8()` | 64→8→1 | accuracy >= 0.80 | Classify 3 vs 8 (hard pair) |
-| `top5_accuracy.py` | `top5_accuracy()` | 64→16→10 | top-5 acc >= 0.85 | Correct label in top 5 predictions |
+| `classify_all.py` | `classify_all()` | 64→13→10 | accuracy >= 0.50 | 10-class digit classification |
+| `binary_0v1.py` | `binary_0v1()` | 64→7→1 | accuracy >= 0.90 | Classify 0 vs 1 (easy pair) |
+| `binary_3v8.py` | `binary_3v8()` | 64→7→1 | accuracy >= 0.80 | Classify 3 vs 8 (hard pair) |
+| `top5_accuracy.py` | `top5_accuracy()` | 64→13→10 | top-5 acc >= 0.85 | Correct label in top 5 predictions |
 
 ## Dependencies
 

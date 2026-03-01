@@ -3,9 +3,9 @@
 Objective: Provide raw float weights for a tiny MLP that classifies digit 0
 vs digit 1 from sklearn's load_digits (8x8 images).
 
-Architecture: 64 -> 8 (ReLU) -> 1 (sigmoid)  (529 parameters)
-  - W1: (64, 8), b1: (8,)
-  - W2: (8, 1), b2: (1,)
+Architecture: 64 -> 7 (ELU) -> 1 (sigmoid)  (462 parameters)
+  - W1: (64, 7), b1: (7,)
+  - W2: (7, 1), b2: (1,)
 
 Benchmark: test accuracy >= 0.90
 
@@ -26,11 +26,11 @@ BENCHMARK_VALUE = 0.90
 
 
 def binary_0v1() -> dict:
-    """Return weight dict for 64->8->1 binary MLP (0 vs 1)."""
+    """Return weight dict for 64->7->1 binary MLP (0 vs 1)."""
     rng = np.random.RandomState(42)
     return {
-        "W1": rng.randn(64, 8).astype(np.float32) * 0.1,
-        "b1": np.zeros(8, dtype=np.float32),
-        "W2": rng.randn(8, 1).astype(np.float32) * 0.1,
+        "W1": rng.randn(64, 7).astype(np.float32) * 0.1,
+        "b1": np.zeros(7, dtype=np.float32),
+        "W2": rng.randn(7, 1).astype(np.float32) * 0.1,
         "b2": np.zeros(1, dtype=np.float32),
     }

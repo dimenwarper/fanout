@@ -162,38 +162,43 @@ def _get_data_binary(digit_a: int, digit_b: int):
 
 # ── Forward passes ──────────────────────────────────────────
 
+def _elu(x: np.ndarray, alpha: float = 1.0) -> np.ndarray:
+    """ELU activation: x if x > 0, alpha * (exp(x) - 1) otherwise."""
+    return np.where(x > 0, x, alpha * (np.exp(np.clip(x, -50, 0)) - 1))
+
+
 def _forward_10class(weights: dict, X: np.ndarray) -> np.ndarray:
-    """Forward pass for 64->16->10 MLP, returns logits."""
+    """Forward pass for 64->13->10 MLP with ELU, returns logits."""
     W1 = np.array(weights["W1"], dtype=np.float32)
     b1 = np.array(weights["b1"], dtype=np.float32)
     W2 = np.array(weights["W2"], dtype=np.float32)
     b2 = np.array(weights["b2"], dtype=np.float32)
 
-    if W1.shape != (64, 16) or b1.shape != (16,):
+    if W1.shape != (64, 13) or b1.shape != (13,):
         raise ValueError(f"Layer 1 shape mismatch: W1={W1.shape}, b1={b1.shape}")
-    if W2.shape != (16, 10) or b2.shape != (10,):
+    if W2.shape != (13, 10) or b2.shape != (10,):
         raise ValueError(f"Layer 2 shape mismatch: W2={W2.shape}, b2={b2.shape}")
 
     h = X @ W1 + b1
-    h = np.maximum(h, 0)  # ReLU
+    h = _elu(h)
     logits = h @ W2 + b2
     return logits
 
 
 def _forward_binary(weights: dict, X: np.ndarray) -> np.ndarray:
-    """Forward pass for 64->8->1 binary MLP, returns probabilities."""
+    """Forward pass for 64->7->1 binary MLP with ELU, returns probabilities."""
     W1 = np.array(weights["W1"], dtype=np.float32)
     b1 = np.array(weights["b1"], dtype=np.float32)
     W2 = np.array(weights["W2"], dtype=np.float32)
     b2 = np.array(weights["b2"], dtype=np.float32)
 
-    if W1.shape != (64, 8) or b1.shape != (8,):
+    if W1.shape != (64, 7) or b1.shape != (7,):
         raise ValueError(f"Layer 1 shape mismatch: W1={W1.shape}, b1={b1.shape}")
-    if W2.shape != (8, 1) or b2.shape != (1,):
+    if W2.shape != (7, 1) or b2.shape != (1,):
         raise ValueError(f"Layer 2 shape mismatch: W2={W2.shape}, b2={b2.shape}")
 
     h = X @ W1 + b1
-    h = np.maximum(h, 0)  # ReLU
+    h = _elu(h)
     logit = (h @ W2 + b2).flatten()
     prob = 1.0 / (1.0 + np.exp(-np.clip(logit, -500, 500)))  # sigmoid
     return prob
