@@ -13,8 +13,101 @@ violation_fraction = pairs with Tanimoto >= 0.6 / total pairs.
 from __future__ import annotations
 
 import importlib.util
+import re
+import signal
 import statistics
 import sys
+
+
+# ── Anti-cheat ──────────────────────────────────────────
+
+BANNED_IMPORTS = [
+    r'^\s*(?:from|import)\s+rdkit\b',
+    r'^\s*(?:from|import)\s+openbabel\b',
+    r'^\s*(?:from|import)\s+pybel\b',
+    r'^\s*(?:from|import)\s+chembl',
+    r'^\s*(?:from|import)\s+pubchempy\b',
+]
+
+BANNED_PATTERNS = [
+    r'__import__\s*\(',
+    r'\bimportlib\b',
+    r'\bMolFromSmiles\b',
+    r'\bMolToSmiles\b',
+    r'\bChem\.\b',
+    r'\bDescriptors\.\b',
+    r'\bAllChem\.\b',
+]
+
+FUNC_TIME_LIMIT = 1.0  # seconds — returning a list of strings is instant
+
+
+def _strip_comments_and_strings(source: str) -> str:
+    """Remove comments, docstrings, and string literals to check only real code."""
+    source = re.sub(r'"""[\s\S]*?"""', '', source)
+    source = re.sub(r"'''[\s\S]*?'''", '', source)
+    source = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', '', source)
+    source = re.sub(r"'[^'\\]*(?:\\.[^'\\]*)*'", '', source)
+    source = re.sub(r'#.*$', '', source, flags=re.MULTILINE)
+    return source
+
+
+def _check_source(path: str) -> str | None:
+    """Scan source for banned imports/patterns. Returns error message or None."""
+    try:
+        with open(path) as f:
+            source = f.read()
+    except Exception:
+        return None
+
+    code_only = _strip_comments_and_strings(source)
+
+    for pattern in BANNED_IMPORTS:
+        if re.search(pattern, code_only, re.MULTILINE):
+            return (
+                f"CHEATING DETECTED: source contains banned import matching '{pattern}'. "
+                f"This benchmark requires you to return a list of SMILES strings directly. "
+                f"You may NOT import or use any chemistry toolkit (rdkit, openbabel, etc.) "
+                f"to generate or validate molecules at runtime. "
+                f"Craft the SMILES strings using your knowledge of molecular structure."
+            )
+
+    for pattern in BANNED_PATTERNS:
+        if re.search(pattern, code_only):
+            return (
+                f"CHEATING DETECTED: source contains banned pattern matching '{pattern}'. "
+                f"This benchmark requires you to return a list of SMILES strings directly — "
+                f"no runtime molecule generation, filtering, or property checking allowed. "
+                f"You must craft valid, diverse SMILES using your knowledge of chemistry."
+            )
+
+    return None
+
+
+class _TimeoutError(Exception):
+    pass
+
+
+def _call_with_timeout(func, timeout: float):
+    """Call func() with a wall-clock time limit."""
+    def _handler(signum, frame):
+        raise _TimeoutError()
+
+    old_handler = signal.signal(signal.SIGALRM, _handler)
+    signal.setitimer(signal.ITIMER_REAL, timeout)
+    try:
+        result = func()
+    except _TimeoutError:
+        raise RuntimeError(
+            f"CHEATING DETECTED: function took longer than {timeout}s. "
+            f"This benchmark requires you to return a list of SMILES strings directly — "
+            f"no runtime molecule generation or search loops allowed. Your function should "
+            f"just return a hardcoded list, which takes milliseconds."
+        )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+    return result
 
 
 def load_module(path: str):
@@ -148,7 +241,12 @@ def eval_maximize_qed(sol) -> float:
         print("Missing maximize_qed()", file=sys.stderr)
         return 0.0
 
-    mols, div_mult = _parse_and_validate(sol.maximize_qed(), EXPECTED_COUNT, "maximize_qed")
+    try:
+        smiles_list = _call_with_timeout(sol.maximize_qed, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
+    mols, div_mult = _parse_and_validate(smiles_list, EXPECTED_COUNT, "maximize_qed")
     if mols is None:
         return div_mult  # 0.0
 
@@ -172,7 +270,12 @@ def eval_qed_logp_balance(sol) -> float:
         print("Missing qed_logp_balance()", file=sys.stderr)
         return 0.0
 
-    mols, div_mult = _parse_and_validate(sol.qed_logp_balance(), EXPECTED_COUNT, "qed_logp_balance")
+    try:
+        smiles_list = _call_with_timeout(sol.qed_logp_balance, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
+    mols, div_mult = _parse_and_validate(smiles_list, EXPECTED_COUNT, "qed_logp_balance")
     if mols is None:
         return div_mult
 
@@ -205,7 +308,12 @@ def eval_constrained_generation(sol) -> float:
         print("Missing constrained_generation()", file=sys.stderr)
         return 0.0
 
-    mols, div_mult = _parse_and_validate(sol.constrained_generation(), EXPECTED_COUNT, "constrained_generation")
+    try:
+        smiles_list = _call_with_timeout(sol.constrained_generation, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
+    mols, div_mult = _parse_and_validate(smiles_list, EXPECTED_COUNT, "constrained_generation")
     if mols is None:
         return div_mult
 
@@ -251,7 +359,12 @@ def eval_drug_candidate(sol) -> float:
         print("Missing drug_candidate()", file=sys.stderr)
         return 0.0
 
-    mols, div_mult = _parse_and_validate(sol.drug_candidate(), EXPECTED_COUNT, "drug_candidate")
+    try:
+        smiles_list = _call_with_timeout(sol.drug_candidate, FUNC_TIME_LIMIT)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 0.0
+    mols, div_mult = _parse_and_validate(smiles_list, EXPECTED_COUNT, "drug_candidate")
     if mols is None:
         return div_mult
 
@@ -309,6 +422,13 @@ def main():
 
     solution_path = sys.argv[1]
     task_name = sys.argv[2] if len(sys.argv) > 2 else "maximize_qed"
+
+    # Static analysis: check for banned imports/patterns
+    cheat_msg = _check_source(solution_path)
+    if cheat_msg:
+        print(cheat_msg, file=sys.stderr)
+        print("0.0")
+        sys.exit(0)
 
     try:
         sol = load_module(solution_path)

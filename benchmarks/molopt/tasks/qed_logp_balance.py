@@ -15,6 +15,12 @@ reduce the score proportionally.
 Benchmark: median balanced * diversity >= 0.85 across 100 molecules
 
 Output: list of 100 SMILES strings.
+
+IMPORTANT: You must return the SMILES strings directly — no runtime generation
+allowed. Importing chemistry toolkits (rdkit, openbabel, etc.) or using any
+molecule generation/filtering at runtime will be detected and score 0.
+A 1-second time limit is enforced. Craft the SMILES using your knowledge of
+molecular structure.
 """
 
 BENCHMARK_VALUE = 0.85

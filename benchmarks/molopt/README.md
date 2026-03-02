@@ -24,6 +24,16 @@ QED >= 0.75, 250 <= MW <= 400, 1.5 <= LogP <= 3.5, 2 <= rings <= 4, HBD <= 3, 40
 
 QED >= 0.7, 200 <= MW <= 500, 0 <= LogP <= 5, HBD <= 5, HBA <= 10, rotatable bonds <= 10, TPSA <= 140
 
+## Anti-Cheat
+
+Solutions must return SMILES strings directly — no runtime molecule generation:
+
+- **Static analysis**: importing chemistry toolkits (rdkit, openbabel, etc.) or using molecule functions (MolFromSmiles, Descriptors, etc.) is detected and scores 0
+- **Dynamic imports** (`__import__`, `importlib`) are banned
+- **Time limit**: function must return within 1 second (returning a list of strings is instant; search loops will timeout)
+
+The LLM must craft valid SMILES from its knowledge of molecular structure — no generate-and-filter at runtime.
+
 ## Dependencies
 
 `rdkit>=2023.9` (installed via `--extra benchmarks`)
