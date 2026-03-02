@@ -129,7 +129,7 @@ def scene_title():
     start_row = 5
 
     for i, line in enumerate(TITLE_ART):
-        put(start_row + i, start_col, f"{BOLD}{BRIGHT_YELLOW}{line}{RESET}")
+        put(start_row + i, start_col, f"{BOLD}{MAGENTA}{line}{RESET}")
         time.sleep(0.08)
 
     pause(0.5)
@@ -404,12 +404,12 @@ def scene_closing():
     clear()
     draw_box(1, 1, W, 24, double=True)
 
-    put(8, center_col(len(TITLE_ART[0])), f"{DIM}{YELLOW}{TITLE_ART[0]}{RESET}")
-    put(9, center_col(len(TITLE_ART[1])), f"{DIM}{YELLOW}{TITLE_ART[1]}{RESET}")
-    put(10, center_col(len(TITLE_ART[2])), f"{DIM}{YELLOW}{TITLE_ART[2]}{RESET}")
-    put(11, center_col(len(TITLE_ART[3])), f"{DIM}{YELLOW}{TITLE_ART[3]}{RESET}")
-    put(12, center_col(len(TITLE_ART[4])), f"{DIM}{YELLOW}{TITLE_ART[4]}{RESET}")
-    put(13, center_col(len(TITLE_ART[5])), f"{DIM}{YELLOW}{TITLE_ART[5]}{RESET}")
+    put(8, center_col(len(TITLE_ART[0])), f"{DIM}{MAGENTA}{TITLE_ART[0]}{RESET}")
+    put(9, center_col(len(TITLE_ART[1])), f"{DIM}{MAGENTA}{TITLE_ART[1]}{RESET}")
+    put(10, center_col(len(TITLE_ART[2])), f"{DIM}{MAGENTA}{TITLE_ART[2]}{RESET}")
+    put(11, center_col(len(TITLE_ART[3])), f"{DIM}{MAGENTA}{TITLE_ART[3]}{RESET}")
+    put(12, center_col(len(TITLE_ART[4])), f"{DIM}{MAGENTA}{TITLE_ART[4]}{RESET}")
+    put(13, center_col(len(TITLE_ART[5])), f"{DIM}{MAGENTA}{TITLE_ART[5]}{RESET}")
 
     pause(0.5)
 
