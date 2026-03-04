@@ -260,7 +260,7 @@ def generate_burgers():
     nx_hi = 512
     nx_lo = 128
     nu = 0.01
-    t_final = 1.0
+    t_final = 5.0
 
     ics = burgers_ics(nx_hi)
     refs = {}
@@ -285,7 +285,7 @@ def generate_navier_stokes():
     nx_hi = 256
     nx_lo = 64
     nu = 1e-3
-    t_final = 1.0
+    t_final = 10.0
 
     ics = ns_ics(nx_hi)
     refs = {}

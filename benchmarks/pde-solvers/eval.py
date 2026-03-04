@@ -42,14 +42,14 @@ TASK_CONFIGS = {
     "burgers_1d": {
         "instances": ["sin", "sin2", "gauss"],
         "nx": 128,
-        "t_final": 1.0,
+        "t_final": 5.0,
         "extra_args": {"nu": 0.01},
-        "timeout": 60,
+        "timeout": 120,
     },
     "navier_stokes_2d": {
         "instances": ["taylor_green", "double_shear", "random_modes"],
         "nx": 64,
-        "t_final": 1.0,
+        "t_final": 10.0,
         "extra_args": {"nu": 1e-3},
         "timeout": 300,
     },

@@ -5,7 +5,7 @@ PDE: ω_t + (u · ∇)ω = ν * ∇²ω
 Domain: [0, 2π] × [0, 2π], doubly periodic boundary conditions
 Viscosity: ν = 1e-3
 Grid: 64 × 64
-Time: integrate to t_final = 1.0
+Time: integrate to t_final = 10.0
 
 The vorticity-streamfunction formulation is used. The streamfunction ψ is
 recovered from vorticity ω via the Poisson equation, then velocity (u, v)
@@ -14,7 +14,7 @@ is computed from ψ.
 Objective: Evolve a numerical solver that produces accurate vorticity fields
 measured by nRMSE against a high-resolution pseudo-spectral reference.
 
-Benchmark (baseline Jacobi-Euler): score ≈ 0.90  (nRMSE ~ 0.11)
+Benchmark (baseline Jacobi-Euler): score ≈ 0.64  (nRMSE ~ 0.57)
 
 Output: 2D numpy array of shape (64, 64) representing ω(x, y, t_final).
 """
@@ -24,7 +24,7 @@ import numpy as np
 NU = 1e-3
 NX = 64
 NY = 64
-T_FINAL = 1.0
+T_FINAL = 10.0
 DOMAIN = (0.0, 2 * np.pi)
 
 

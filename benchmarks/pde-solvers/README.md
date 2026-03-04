@@ -6,9 +6,9 @@ Evolutionary code generation for numerical PDE solvers. Uses fanout's multi-mode
 
 | Task | PDE | Difficulty | Grid | Baseline Score |
 |------|-----|------------|------|----------------|
-| `burgers_1d` | 1D Burgers (ν=0.01) | Easy | 128 | ~0.84 |
-| `navier_stokes_2d` | 2D Navier-Stokes vorticity | Medium | 64×64 | ~0.90 |
-| `ks_1d` | 1D Kuramoto-Sivashinsky | Hard | 256 | ~0.60 |
+| `burgers_1d` | 1D Burgers (ν=0.01, t=5) | Easy | 128 | ~0.70 |
+| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64×64 | ~0.64 |
+| `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | ~0.60 |
 
 Score = `1 / (1 + avg_nRMSE)` where nRMSE is computed against high-resolution spectral reference solutions.
 

@@ -46,15 +46,15 @@ TASKS = {
         "file": "tasks/burgers_1d.py",
         "function": "solve_pde",
         "description": "1D Burgers equation (ν=0.01, periodic, 128 pts) — Tier 1: Easy",
-        "timeout": 60,
-        "benchmark": 0.84,
+        "timeout": 120,
+        "benchmark": 0.70,
     },
     "navier_stokes_2d": {
         "file": "tasks/navier_stokes_2d.py",
         "function": "solve_pde",
         "description": "2D Navier-Stokes vorticity (ν=1e-3, 64×64, periodic) — Tier 2: Medium",
         "timeout": 300,
-        "benchmark": 0.90,
+        "benchmark": 0.64,
     },
     "ks_1d": {
         "file": "tasks/ks_1d.py",
