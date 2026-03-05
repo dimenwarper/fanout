@@ -2,6 +2,10 @@
   <img src="assets/logo.png" alt="fanout logo" width="300">
 </p>
 
+<p align="center">
+  <img src="assets/fanout_pres.gif" alt="fanout demo" width="700">
+</p>
+
 # What is fanout?
 
 Basically:
