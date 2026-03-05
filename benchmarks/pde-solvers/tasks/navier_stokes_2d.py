@@ -1,22 +1,23 @@
 """2D Navier-Stokes Vorticity Equation Solver.
 
-PDE: ω_t + (u · ∇)ω = ν * ∇²ω
-     ∇²ψ = -ω,  u = (ψ_y, -ψ_x)
-Domain: [0, 2π] × [0, 2π], doubly periodic boundary conditions
-Viscosity: ν = 1e-3
-Grid: 64 × 64
-Time: integrate to t_final = 10.0
+PDE: omega_t + (u . grad)omega = nu * laplacian(omega)
+     laplacian(psi) = -omega,  u = (psi_y, -psi_x)
+Domain: [0, 2pi] x [0, 2pi], doubly periodic boundary conditions
+Viscosity: nu = 1e-3
+Grid: 64 x 64
+Time: 10 trajectory snapshots up to t_final = 10.0
 
-The vorticity-streamfunction formulation is used. The streamfunction ψ is
-recovered from vorticity ω via the Poisson equation, then velocity (u, v)
-is computed from ψ.
-
-Objective: Evolve a numerical solver that produces accurate vorticity fields
+Objective: Evolve a numerical solver that produces accurate vorticity trajectories
 measured by nRMSE against a high-resolution pseudo-spectral reference.
 
-Benchmark (baseline Jacobi-Euler): score ≈ 0.64  (nRMSE ~ 0.57)
+Benchmark (baseline Jacobi-Euler): score ~ 0.56
 
-Output: 2D numpy array of shape (64, 64) representing ω(x, y, t_final).
+Input:
+  u0_batch: [batch_size, 64, 64] initial vorticity fields
+  t_coordinates: [T] time points to return solution at (not including t=0)
+  nu: kinematic viscosity (default 1e-3)
+
+Output: numpy array of shape [batch_size, T, 64, 64].
 """
 
 import numpy as np
@@ -28,60 +29,69 @@ T_FINAL = 10.0
 DOMAIN = (0.0, 2 * np.pi)
 
 
-def solve_pde(ic: np.ndarray, nx: int, t_final: float, nu: float) -> np.ndarray:
+def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray, nu: float = NU) -> np.ndarray:
     """Solve 2D Navier-Stokes (vorticity-streamfunction) with explicit Euler.
 
     Parameters
     ----------
-    ic : np.ndarray
-        Initial vorticity field ω(x, y, 0) of shape (nx, nx).
-    nx : int
-        Number of grid points in each direction.
-    t_final : float
-        Final integration time.
+    u0_batch : np.ndarray
+        Batch of initial vorticity fields, shape [batch_size, nx, nx].
+    t_coordinates : np.ndarray
+        Time points to record snapshots at, shape [T].
     nu : float
         Kinematic viscosity.
 
     Returns
     -------
     np.ndarray
-        Vorticity field ω(x, y, t_final) of shape (nx, nx).
+        Vorticity trajectories of shape [batch_size, T, nx, nx].
     """
+    batch_size = u0_batch.shape[0]
+    nx = u0_batch.shape[1]
+    n_times = len(t_coordinates)
+    results = np.zeros((batch_size, n_times, nx, nx))
     dx = 2 * np.pi / nx
-    dt = 0.05  # large fixed timestep
-    omega = ic.copy()
-    t = 0.0
 
-    while t < t_final:
-        if t + dt > t_final:
-            dt = t_final - t
+    for b in range(batch_size):
+        omega = u0_batch[b].copy()
+        t = 0.0
+        dt = 0.05
+        t_idx = 0
 
-        # Solve Poisson ∇²ψ = -ω via Jacobi iteration (deliberately crude)
-        psi = np.zeros_like(omega)
-        for _ in range(10):  # very few Jacobi iterations — inaccurate
-            psi = 0.25 * (
-                np.roll(psi, 1, axis=0) + np.roll(psi, -1, axis=0)
-                + np.roll(psi, 1, axis=1) + np.roll(psi, -1, axis=1)
-                + dx**2 * omega
-            )
+        while t_idx < n_times:
+            target = t_coordinates[t_idx]
+            while t < target - 1e-14:
+                step = min(dt, target - t)
 
-        # Velocity from streamfunction: u = ψ_y, v = -ψ_x
-        u = (np.roll(psi, -1, axis=1) - np.roll(psi, 1, axis=1)) / (2 * dx)
-        v = -(np.roll(psi, -1, axis=0) - np.roll(psi, 1, axis=0)) / (2 * dx)
+                # Solve Poisson via Jacobi iteration (deliberately crude)
+                psi = np.zeros_like(omega)
+                for _ in range(10):
+                    psi = 0.25 * (
+                        np.roll(psi, 1, axis=0) + np.roll(psi, -1, axis=0)
+                        + np.roll(psi, 1, axis=1) + np.roll(psi, -1, axis=1)
+                        + dx**2 * omega
+                    )
 
-        # Advection: central differences
-        domega_dx = (np.roll(omega, -1, axis=0) - np.roll(omega, 1, axis=0)) / (2 * dx)
-        domega_dy = (np.roll(omega, -1, axis=1) - np.roll(omega, 1, axis=1)) / (2 * dx)
-        advection = u * domega_dx + v * domega_dy
+                # Velocity from streamfunction
+                u = (np.roll(psi, -1, axis=1) - np.roll(psi, 1, axis=1)) / (2 * dx)
+                v = -(np.roll(psi, -1, axis=0) - np.roll(psi, 1, axis=0)) / (2 * dx)
 
-        # Diffusion: 5-point Laplacian
-        laplacian = (
-            np.roll(omega, -1, axis=0) + np.roll(omega, 1, axis=0)
-            + np.roll(omega, -1, axis=1) + np.roll(omega, 1, axis=1)
-            - 4 * omega
-        ) / dx**2
+                # Advection: central differences
+                domega_dx = (np.roll(omega, -1, axis=0) - np.roll(omega, 1, axis=0)) / (2 * dx)
+                domega_dy = (np.roll(omega, -1, axis=1) - np.roll(omega, 1, axis=1)) / (2 * dx)
+                advection = u * domega_dx + v * domega_dy
 
-        omega = omega + dt * (-advection + nu * laplacian)
-        t += dt
+                # Diffusion: 5-point Laplacian
+                laplacian = (
+                    np.roll(omega, -1, axis=0) + np.roll(omega, 1, axis=0)
+                    + np.roll(omega, -1, axis=1) + np.roll(omega, 1, axis=1)
+                    - 4 * omega
+                ) / dx**2
 
-    return omega
+                omega = omega + step * (-advection + nu * laplacian)
+                t += step
+
+            results[b, t_idx] = omega
+            t_idx += 1
+
+    return results

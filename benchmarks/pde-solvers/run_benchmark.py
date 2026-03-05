@@ -47,21 +47,21 @@ TASKS = {
         "function": "solve_pde",
         "description": "1D Burgers equation (ν=0.01, periodic, 128 pts) — Tier 1: Easy",
         "timeout": 120,
-        "benchmark": 0.70,
+        "benchmark": 0.65,
     },
     "navier_stokes_2d": {
         "file": "tasks/navier_stokes_2d.py",
         "function": "solve_pde",
         "description": "2D Navier-Stokes vorticity (ν=1e-3, 64×64, periodic) — Tier 2: Medium",
         "timeout": 300,
-        "benchmark": 0.64,
+        "benchmark": 0.56,
     },
     "ks_1d": {
         "file": "tasks/ks_1d.py",
         "function": "solve_pde",
         "description": "1D Kuramoto-Sivashinsky (chaotic, 256 pts) — Tier 3: Hard",
         "timeout": 300,
-        "benchmark": 0.60,
+        "benchmark": 0.66,
     },
 }
 
@@ -74,8 +74,9 @@ def build_prompt(task_name: str, task_info: dict) -> str:
     return (
         f"{task_source}\n\n"
         f"Improve the function `{task_info['function']}()` to achieve the best possible score. "
-        f"The score is computed as 1/(1 + avg_nRMSE) where nRMSE is normalized RMSE against "
-        f"a high-resolution spectral reference solution.\n\n"
+        f"The score is computed as 1/(1 + avg_nRMSE) where nRMSE = ||pred - ref||_2 / ||ref||_2 "
+        f"(CodePDE-style L2 norm), evaluated over full trajectories (10 time snapshots) "
+        f"and averaged across 20 test instances.\n\n"
         f"The baseline score is approximately {task_info['benchmark']}. "
         f"Better numerical methods (spectral, implicit, higher-order) will score higher.\n\n"
         f"Keep the same function name and signature. You may use numpy and scipy."

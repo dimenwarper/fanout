@@ -1,20 +1,24 @@
 """1D Kuramoto-Sivashinsky Equation Solver.
 
 PDE: u_t + u * u_x + u_xx + u_xxxx = 0
-Domain: x ∈ [0, 32π], periodic boundary conditions
+Domain: x in [0, 32pi], periodic boundary conditions
 Grid: 256 points
-Time: integrate to t_final = 50.0
+Time: 10 trajectory snapshots up to t_final = 50.0
 
 The KS equation exhibits spatiotemporal chaos, making it a challenging
 test for numerical PDE solvers. The fourth-order derivative u_xxxx
 requires careful handling for stability.
 
-Objective: Evolve a numerical solver that produces accurate solutions
+Objective: Evolve a numerical solver that produces accurate trajectory solutions
 measured by nRMSE against a high-resolution ETDRK4 reference.
 
-Benchmark (baseline explicit Euler): score ≈ 0.60  (nRMSE ~ 0.67)
+Benchmark (baseline explicit Euler): score ~ 0.66
 
-Output: 1D numpy array of shape (256,) representing u(x, t_final).
+Input:
+  u0_batch: [batch_size, 256] initial conditions
+  t_coordinates: [T] time points to return solution at (not including t=0)
+
+Output: numpy array of shape [batch_size, T, 256].
 """
 
 import numpy as np
@@ -24,47 +28,53 @@ T_FINAL = 50.0
 DOMAIN = (0.0, 32 * np.pi)
 
 
-def solve_pde(ic: np.ndarray, nx: int, t_final: float) -> np.ndarray:
+def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray) -> np.ndarray:
     """Solve 1D Kuramoto-Sivashinsky equation using explicit Euler.
 
     Parameters
     ----------
-    ic : np.ndarray
-        Initial condition u(x, 0) on a uniform grid of size `nx`.
-    nx : int
-        Number of spatial grid points.
-    t_final : float
-        Final integration time.
+    u0_batch : np.ndarray
+        Batch of initial conditions, shape [batch_size, nx].
+    t_coordinates : np.ndarray
+        Time points to record snapshots at, shape [T].
 
     Returns
     -------
     np.ndarray
-        Solution u(x, t_final) of shape (nx,).
+        Solutions of shape [batch_size, T, nx].
     """
+    batch_size, nx = u0_batch.shape
+    n_times = len(t_coordinates)
+    results = np.zeros((batch_size, n_times, nx))
+
     L = 32 * np.pi
     dx = L / nx
-    dt = 0.01 * dx**4  # very restrictive CFL for 4th-order term
+    dt = 0.01 * dx**4
     dt = min(dt, 0.01)
-    u = ic.copy()
-    t = 0.0
 
-    while t < t_final:
-        if t + dt > t_final:
-            dt = t_final - t
+    for b in range(batch_size):
+        u = u0_batch[b].copy()
+        t = 0.0
+        t_idx = 0
 
-        u_right = np.roll(u, -1)
-        u_left = np.roll(u, 1)
-        u_right2 = np.roll(u, -2)
-        u_left2 = np.roll(u, 2)
+        while t_idx < n_times:
+            target = t_coordinates[t_idx]
+            while t < target - 1e-14:
+                step = min(dt, target - t)
 
-        # u_x: central difference
-        ux = (u_right - u_left) / (2 * dx)
-        # u_xx: central second difference
-        uxx = (u_right - 2 * u + u_left) / dx**2
-        # u_xxxx: central fourth difference
-        uxxxx = (u_left2 - 4 * u_left + 6 * u - 4 * u_right + u_right2) / dx**4
+                u_right = np.roll(u, -1)
+                u_left = np.roll(u, 1)
+                u_right2 = np.roll(u, -2)
+                u_left2 = np.roll(u, 2)
 
-        u = u + dt * (-u * ux - uxx - uxxxx)
-        t += dt
+                ux = (u_right - u_left) / (2 * dx)
+                uxx = (u_right - 2 * u + u_left) / dx**2
+                uxxxx = (u_left2 - 4 * u_left + 6 * u - 4 * u_right + u_right2) / dx**4
 
-    return u
+                u = u + step * (-u * ux - uxx - uxxxx)
+                t += step
+
+            results[b, t_idx] = u
+            t_idx += 1
+
+    return results

@@ -5,8 +5,11 @@ Usage: ./eval.py <solution_file> [task_name]
 
 task_name: burgers_1d | navier_stokes_2d | ks_1d
 
-The solution file must define solve_pde() with the appropriate signature.
-Prints the score on the last line: score = 1.0 / (1.0 + avg_nrmse).
+The solution file must define solve_pde(u0_batch, t_coordinates, [nu]) returning
+a trajectory array of shape [batch_size, T, *spatial_dims].
+
+Metric: CodePDE-style nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories.
+Score = 1.0 / (1.0 + avg_nrmse).
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ import numpy as np
 
 REF_DIR = Path(__file__).resolve().parent / "reference"
 
+N_INSTANCES = 20
+
 
 def load_module(path: str):
     spec = importlib.util.spec_from_file_location("solution", path)
@@ -29,41 +34,35 @@ def load_module(path: str):
 
 
 def nrmse(pred: np.ndarray, ref: np.ndarray) -> float:
-    """Normalized RMSE: RMSE / std(ref)."""
-    std = np.std(ref)
-    if std < 1e-12:
+    """CodePDE-style nRMSE: ||pred - ref||_2 / ||ref||_2."""
+    ref_norm = np.linalg.norm(ref.ravel())
+    if ref_norm < 1e-12:
         return 0.0 if np.allclose(pred, ref) else 1e6
-    return float(np.sqrt(np.mean((pred - ref) ** 2)) / std)
+    return float(np.linalg.norm((pred - ref).ravel()) / ref_norm)
 
 
-# ── Task configs ─────────────────────────────────────────────────────
+# -- Task configs --------------------------------------------------------------
 
 TASK_CONFIGS = {
     "burgers_1d": {
-        "instances": ["sin", "sin2", "gauss"],
-        "nx": 128,
-        "t_final": 5.0,
+        "n_instances": N_INSTANCES,
         "extra_args": {"nu": 0.01},
         "timeout": 120,
     },
     "navier_stokes_2d": {
-        "instances": ["taylor_green", "double_shear", "random_modes"],
-        "nx": 64,
-        "t_final": 10.0,
+        "n_instances": N_INSTANCES,
         "extra_args": {"nu": 1e-3},
         "timeout": 300,
     },
     "ks_1d": {
-        "instances": ["cos", "sin_modes", "localized"],
-        "nx": 256,
-        "t_final": 50.0,
+        "n_instances": N_INSTANCES,
         "extra_args": {},
         "timeout": 300,
     },
 }
 
 
-# ── Evaluator ────────────────────────────────────────────────────────
+# -- Evaluator -----------------------------------------------------------------
 
 
 class TimeoutError(Exception):
@@ -75,70 +74,75 @@ def _timeout_handler(signum, frame):
 
 
 def eval_task(sol, task_name: str) -> float:
-    """Evaluate a solve_pde() function against reference solutions."""
+    """Evaluate a solve_pde() function against reference solutions (batched)."""
     if not hasattr(sol, "solve_pde"):
         print("Missing solve_pde()", file=sys.stderr)
         return 0.0
 
     cfg = TASK_CONFIGS[task_name]
-    instances = cfg["instances"]
-    nx = cfg["nx"]
-    t_final = cfg["t_final"]
+    n_inst = cfg["n_instances"]
     extra = cfg["extra_args"]
     timeout = cfg["timeout"]
 
-    errors = []
-    for inst_name in instances:
-        ic_path = REF_DIR / f"{task_name}_ic_{inst_name}.npy"
-        ref_path = REF_DIR / f"{task_name}_ref_{inst_name}.npy"
+    # Load t_coordinates
+    t_coords_path = REF_DIR / f"{task_name}_t_coordinates.npy"
+    if not t_coords_path.exists():
+        print(f"Missing {t_coords_path}", file=sys.stderr)
+        print("Run: python benchmarks/pde-solvers/reference/generate_references.py", file=sys.stderr)
+        return 0.0
 
+    t_coordinates = np.load(t_coords_path)
+
+    # Load all ICs and references
+    ics = []
+    refs = []
+    for idx in range(n_inst):
+        ic_path = REF_DIR / f"{task_name}_ic_{idx:02d}.npy"
+        ref_path = REF_DIR / f"{task_name}_ref_{idx:02d}.npy"
         if not ic_path.exists() or not ref_path.exists():
             print(f"Reference not found: {ic_path} or {ref_path}", file=sys.stderr)
             print("Run: python benchmarks/pde-solvers/reference/generate_references.py", file=sys.stderr)
             return 0.0
+        ics.append(np.load(ic_path))
+        refs.append(np.load(ref_path))
 
-        ic = np.load(ic_path)
-        ref = np.load(ref_path)
+    u0_batch = np.stack(ics, axis=0)  # [N, *spatial]
+    ref_trajs = np.stack(refs, axis=0)  # [N, T, *spatial]
 
-        try:
-            # Set timeout
-            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(timeout)
+    # Run batched evaluation
+    try:
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(timeout)
 
-            result = sol.solve_pde(ic, nx, t_final, **extra)
+        result = sol.solve_pde(u0_batch, t_coordinates, **extra)
 
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-        except TimeoutError:
-            print(f"  Instance '{inst_name}': TIMEOUT ({timeout}s)", file=sys.stderr)
-            errors.append(1e6)
-            continue
-        except Exception as e:
-            print(f"  Instance '{inst_name}': ERROR {e}", file=sys.stderr)
-            errors.append(1e6)
-            continue
-
-        if not isinstance(result, np.ndarray):
-            print(f"  Instance '{inst_name}': result not ndarray", file=sys.stderr)
-            errors.append(1e6)
-            continue
-
-        if result.shape != ref.shape:
-            print(f"  Instance '{inst_name}': shape mismatch {result.shape} vs {ref.shape}", file=sys.stderr)
-            errors.append(1e6)
-            continue
-
-        if np.any(np.isnan(result)) or np.any(np.isinf(result)):
-            print(f"  Instance '{inst_name}': NaN/Inf in result", file=sys.stderr)
-            errors.append(1e6)
-            continue
-
-        err = nrmse(result, ref)
-        errors.append(err)
-        print(f"  Instance '{inst_name}': nRMSE={err:.6f}", file=sys.stderr)
-
-    if not errors:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+    except TimeoutError:
+        print(f"TIMEOUT ({timeout}s)", file=sys.stderr)
         return 0.0
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 0.0
+
+    if not isinstance(result, np.ndarray):
+        print("Result is not ndarray", file=sys.stderr)
+        return 0.0
+
+    if result.shape != ref_trajs.shape:
+        print(f"Shape mismatch: {result.shape} vs {ref_trajs.shape}", file=sys.stderr)
+        return 0.0
+
+    if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+        print("NaN/Inf in result", file=sys.stderr)
+        return 0.0
+
+    # Compute per-instance nRMSE over full trajectory
+    errors = []
+    for i in range(n_inst):
+        err = nrmse(result[i], ref_trajs[i])
+        errors.append(err)
+        print(f"  Instance {i:02d}: nRMSE={err:.6f}", file=sys.stderr)
 
     avg_nrmse = np.mean(errors)
     score = 1.0 / (1.0 + avg_nrmse)
