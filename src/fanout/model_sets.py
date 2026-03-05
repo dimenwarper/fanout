@@ -38,7 +38,6 @@ BUILTIN_SETS: dict[str, ModelSet] = {
             ModelEntry(model="openai/gpt-4o"),
             ModelEntry(model="anthropic/claude-sonnet-4"),
             ModelEntry(model="moonshotai/kimi-k2-thinking"),
-            ModelEntry(model="minimax/minimax-m2.5"),
             ModelEntry(model="z-ai/glm-4.7"),
             ModelEntry(model="google/gemini-3.1-pro-preview"),
             ModelEntry(model="openai/gpt-5.2-codex"),
