@@ -179,7 +179,12 @@ def select_step(ctx: WorkflowContext) -> None:
 
     top_score = ctx.selected[0].aggregate_score if ctx.selected else 0.0
     ctx.round_scores.append(top_score)
-    ctx.best_score = max(ctx.best_score, top_score)
+    # Compute best from all evaluated solutions, not just the selected set —
+    # selection strategies (e.g. darwinian) may deprioritise the top scorer
+    # in favour of novelty, but best_score should reflect the true max.
+    all_scored = ctx.store.get_solutions_with_scores(ctx.run.id)
+    global_best = max((s.aggregate_score for s in all_scored), default=0.0)
+    ctx.best_score = max(ctx.best_score, global_best)
 
     if ctx.console:
         ctx.console.print(f"top={top_score:.4f} best={ctx.best_score:.4f}")
