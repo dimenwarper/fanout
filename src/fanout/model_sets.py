@@ -68,6 +68,15 @@ BUILTIN_SETS: dict[str, ModelSet] = {
             ModelEntry(model="qwen/qwen3-coder", weight=1.0),
         ],
     ),
+    "cheap": ModelSet(
+        name="cheap",
+        models=[
+            ModelEntry(model="openai/gpt-4o-mini"),
+            ModelEntry(model="google/gemini-2.5-flash"),
+            ModelEntry(model="anthropic/claude-haiku-4-5"),
+            ModelEntry(model="deepseek/deepseek-v3.2"),
+        ],
+    ),
     "math-proving": ModelSet(
         name="math-proving",
         models=[
