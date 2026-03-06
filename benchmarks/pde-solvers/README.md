@@ -4,11 +4,11 @@ Evolutionary code generation for numerical PDE solvers. Uses fanout's multi-mode
 
 ## Tasks
 
-| Task | PDE | Difficulty | Grid | Instances | Baseline Score |
-|------|-----|------------|------|-----------|----------------|
-| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | ~0.65 |
-| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | ~0.56 |
-| `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | 20 | ~0.66 |
+| Task | PDE | Difficulty | Grid | Instances | Runtime Budget | Baseline Score |
+|------|-----|------------|------|-----------|----------------|----------------|
+| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | 10s | ~0.65 |
+| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | 30s | ~0.56 |
+| `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | 20 | 30s | ~0.27 |
 
 ## Metric
 
@@ -17,6 +17,7 @@ Following [CodePDE (arXiv:2505.08783)](https://arxiv.org/abs/2505.08783):
 - **nRMSE** = `||pred - ref||_2 / ||ref||_2` (L2 norm ratio over full trajectory)
 - **Score** = `1 / (1 + avg_nRMSE)` averaged across 20 instances per task
 - Evaluation uses 10 trajectory snapshots (not just final state)
+- **Runtime penalty**: solutions exceeding the time budget are penalized by `score *= budget / elapsed`
 
 ## Solver Interface
 
@@ -47,13 +48,7 @@ uv run --extra benchmarks python benchmarks/pde-solvers/run_benchmark.py --tasks
 
 ## What LLMs Can Improve
 
-The baselines use explicit Euler finite differences — deliberately mediocre. LLMs can improve by:
-
-- Using spectral/pseudo-spectral methods (FFT-based)
-- Implicit or semi-implicit time integration (Crank-Nicolson, IMEX)
-- Higher-order methods (RK4, ETDRK4)
-- Operator splitting techniques
-- Adaptive timestepping
+The baselines use explicit Euler finite differences — deliberately mediocre. LLMs can improve by using better numerical methods, but must stay within the runtime budget (no brute-force upsampling).
 
 ## Dependencies
 

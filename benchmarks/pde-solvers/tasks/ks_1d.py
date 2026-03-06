@@ -1,7 +1,7 @@
 """1D Kuramoto-Sivashinsky Equation Solver.
 
-PDE: u_t + u * u_x + u_xx + u_xxxx = 0
-Domain: x in [0, 32pi], periodic boundary conditions
+PDE:  u_t + u * u_x + u_xx + u_xxxx = 0
+Domain: x in [0, 32*pi], periodic boundary conditions
 Grid: 256 points
 Time: 10 trajectory snapshots up to t_final = 50.0
 
@@ -9,10 +9,12 @@ The KS equation exhibits spatiotemporal chaos, making it a challenging
 test for numerical PDE solvers. The fourth-order derivative u_xxxx
 requires careful handling for stability.
 
-Objective: Evolve a numerical solver that produces accurate trajectory solutions
-measured by nRMSE against a high-resolution ETDRK4 reference.
+Scoring: nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories,
+averaged across 20 test instances. Score = 1/(1 + avg_nRMSE).
+Runtime budget: 30 seconds for the full batch (20 instances).
 
-Benchmark (baseline explicit Euler): score ~ 0.66
+NOTE: The baseline explicit Euler solver exceeds the runtime budget and
+receives a penalty. A better algorithm is needed to score well.
 
 Input:
   u0_batch: [batch_size, 256] initial conditions

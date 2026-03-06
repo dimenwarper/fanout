@@ -61,7 +61,7 @@ TASKS = {
         "function": "solve_pde",
         "description": "1D Kuramoto-Sivashinsky (chaotic, 256 pts) — Tier 3: Hard",
         "timeout": 300,
-        "benchmark": 0.66,
+        "benchmark": 0.27,
     },
 }
 
@@ -75,10 +75,12 @@ def build_prompt(task_name: str, task_info: dict) -> str:
         f"{task_source}\n\n"
         f"Improve the function `{task_info['function']}()` to achieve the best possible score. "
         f"The score is computed as 1/(1 + avg_nRMSE) where nRMSE = ||pred - ref||_2 / ||ref||_2 "
-        f"(CodePDE-style L2 norm), evaluated over full trajectories (10 time snapshots) "
+        f"evaluated over full trajectories (10 time snapshots) "
         f"and averaged across 20 test instances.\n\n"
+        f"Solutions that exceed the runtime budget receive a score penalty "
+        f"(score *= budget/elapsed), so brute-force high-resolution approaches won't work.\n\n"
         f"The baseline score is approximately {task_info['benchmark']}. "
-        f"Better numerical methods (spectral, implicit, higher-order) will score higher.\n\n"
+        f"Better numerical methods will score higher.\n\n"
         f"Keep the same function name and signature. You may use numpy and scipy."
     )
 

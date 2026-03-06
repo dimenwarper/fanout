@@ -1,16 +1,15 @@
 """2D Navier-Stokes Vorticity Equation Solver.
 
-PDE: omega_t + (u . grad)omega = nu * laplacian(omega)
-     laplacian(psi) = -omega,  u = (psi_y, -psi_x)
-Domain: [0, 2pi] x [0, 2pi], doubly periodic boundary conditions
+PDE:  omega_t + (u . grad)omega = nu * laplacian(omega)
+      laplacian(psi) = -omega,  u = (psi_y, -psi_x)
+Domain: [0, 2*pi] x [0, 2*pi], doubly periodic boundary conditions
 Viscosity: nu = 1e-3
 Grid: 64 x 64
 Time: 10 trajectory snapshots up to t_final = 10.0
 
-Objective: Evolve a numerical solver that produces accurate vorticity trajectories
-measured by nRMSE against a high-resolution pseudo-spectral reference.
-
-Benchmark (baseline Jacobi-Euler): score ~ 0.56
+Scoring: nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories,
+averaged across 20 test instances. Score = 1/(1 + avg_nRMSE).
+Runtime budget: 30 seconds for the full batch (20 instances).
 
 Input:
   u0_batch: [batch_size, 64, 64] initial vorticity fields
@@ -63,7 +62,7 @@ def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray, nu: float = NU) -
             while t < target - 1e-14:
                 step = min(dt, target - t)
 
-                # Solve Poisson via Jacobi iteration (deliberately crude)
+                # Solve Poisson via Jacobi iteration
                 psi = np.zeros_like(omega)
                 for _ in range(10):
                     psi = 0.25 * (

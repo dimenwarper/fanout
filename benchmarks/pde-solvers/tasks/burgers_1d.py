@@ -1,15 +1,14 @@
 """1D Burgers' Equation Solver.
 
-PDE: u_t + u * u_x = nu * u_xx
-Domain: x in [0, 2pi], periodic boundary conditions
+PDE:  u_t + u * u_x = nu * u_xx
+Domain: x in [0, 2*pi], periodic boundary conditions
 Viscosity: nu = 0.01
 Grid: 128 points
 Time: 10 trajectory snapshots up to t_final = 5.0
 
-Objective: Evolve a numerical solver that produces accurate trajectory solutions
-measured by nRMSE against a high-resolution spectral reference.
-
-Benchmark (baseline upwind Euler): score ~ 0.65
+Scoring: nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories,
+averaged across 20 test instances. Score = 1/(1 + avg_nRMSE).
+Runtime budget: 10 seconds for the full batch (20 instances).
 
 Input:
   u0_batch: [batch_size, 128] initial conditions
@@ -28,7 +27,7 @@ DOMAIN = (0.0, 2 * np.pi)
 
 
 def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray, nu: float = NU) -> np.ndarray:
-    """Solve 1D Burgers equation using explicit Euler finite differences.
+    """Solve 1D Burgers equation using first-order upwind finite differences.
 
     Parameters
     ----------
