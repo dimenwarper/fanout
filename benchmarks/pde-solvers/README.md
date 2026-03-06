@@ -6,9 +6,9 @@ Evolutionary code generation for numerical PDE solvers. Uses fanout's multi-mode
 
 | Task | PDE | Difficulty | Grid | Instances | Runtime Budget | Baseline Score |
 |------|-----|------------|------|-----------|----------------|----------------|
-| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | 10s | ~0.65 |
-| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | 30s | ~0.56 |
-| `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | 20 | 30s | ~0.27 |
+| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | 2s | ~0.65 |
+| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | 10s | ~0.56 |
+| `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | 20 | 10s | ~0.27 |
 
 ## Metric
 

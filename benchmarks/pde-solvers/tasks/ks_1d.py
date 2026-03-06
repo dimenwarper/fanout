@@ -11,7 +11,7 @@ requires careful handling for stability.
 
 Scoring: nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories,
 averaged across 20 test instances. Score = 1/(1 + avg_nRMSE).
-Runtime budget: 30 seconds for the full batch (20 instances).
+Runtime budget: 10 seconds for the full batch (20 instances).
 
 NOTE: The baseline explicit Euler solver exceeds the runtime budget and
 receives a penalty. A better algorithm is needed to score well.

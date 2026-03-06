@@ -51,19 +51,19 @@ TASK_CONFIGS = {
         "n_instances": N_INSTANCES,
         "extra_args": {"nu": 0.01},
         "timeout": 120,
-        "runtime_budget": 10.0,
+        "runtime_budget": 2.0,
     },
     "navier_stokes_2d": {
         "n_instances": N_INSTANCES,
         "extra_args": {"nu": 1e-3},
         "timeout": 300,
-        "runtime_budget": 30.0,
+        "runtime_budget": 10.0,
     },
     "ks_1d": {
         "n_instances": N_INSTANCES,
         "extra_args": {},
         "timeout": 300,
-        "runtime_budget": 30.0,
+        "runtime_budget": 10.0,
     },
 }
 
