@@ -1,9 +1,9 @@
 """1D Kuramoto-Sivashinsky Equation Solver.
 
 PDE:  u_t + u * u_x + u_xx + u_xxxx = 0
-Domain: x in [0, 32*pi], periodic boundary conditions
+Domain: x in [0, 64*pi], periodic boundary conditions
 Grid: 256 points
-Time: 10 trajectory snapshots up to t_final = 50.0
+Time: 10 trajectory snapshots up to t_final = 200.0
 
 The KS equation exhibits spatiotemporal chaos, making it a challenging
 test for numerical PDE solvers. The fourth-order derivative u_xxxx
@@ -26,8 +26,8 @@ Output: numpy array of shape [batch_size, T, 256].
 import numpy as np
 
 NX = 256
-T_FINAL = 50.0
-DOMAIN = (0.0, 32 * np.pi)
+T_FINAL = 200.0
+DOMAIN = (0.0, 64 * np.pi)
 
 
 def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray) -> np.ndarray:
@@ -49,7 +49,7 @@ def solve_pde(u0_batch: np.ndarray, t_coordinates: np.ndarray) -> np.ndarray:
     n_times = len(t_coordinates)
     results = np.zeros((batch_size, n_times, nx))
 
-    L = 32 * np.pi
+    L = 64 * np.pi
     dx = L / nx
     dt = 0.01 * dx**4
     dt = min(dt, 0.01)

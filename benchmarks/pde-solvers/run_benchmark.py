@@ -61,7 +61,7 @@ TASKS = {
         "function": "solve_pde",
         "description": "1D Kuramoto-Sivashinsky (chaotic, 256 pts) — Tier 3: Hard",
         "timeout": 300,
-        "benchmark": 0.27,
+        "benchmark": 0.15,
     },
 }
 

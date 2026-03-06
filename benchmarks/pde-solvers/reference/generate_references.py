@@ -81,11 +81,11 @@ def ns_ics(nx: int, n: int = N_INSTANCES) -> list[np.ndarray]:
 
 
 def ks_ics(nx: int, n: int = N_INSTANCES) -> list[np.ndarray]:
-    """Generate n initial conditions for 1D KS on [0, 32pi].
+    """Generate n initial conditions for 1D KS on [0, 64pi].
 
     First 3 are hand-crafted; remainder are random low-mode superpositions.
     """
-    L = 32 * np.pi
+    L = 64 * np.pi
     x = np.linspace(0, L, nx, endpoint=False)
     ics: list[np.ndarray] = [
         np.cos(x / 16) * (1 + np.sin(x / 16)),
@@ -209,7 +209,7 @@ def solve_ks_etdrk4(ic: np.ndarray, nx: int, t_coords: np.ndarray) -> np.ndarray
 
     Returns array of shape (len(t_coords), nx).
     """
-    L = 32 * np.pi
+    L = 64 * np.pi
     k = 2 * np.pi / L * np.fft.fftfreq(nx) * nx
     Lk = k**2 - k**4
 
@@ -230,9 +230,13 @@ def solve_ks_etdrk4(ic: np.ndarray, nx: int, t_coords: np.ndarray) -> np.ndarray
     f2 = dt * np.real(np.mean((2 + LR + np.exp(LR) * (-2 + LR)) / LR**3, axis=1))
     f3 = dt * np.real(np.mean((-4 - 3 * LR - LR**2 + np.exp(LR) * (4 - LR)) / LR**3, axis=1))
 
+    # Dealiasing mask (2/3 rule)
+    dealias = np.ones(nx)
+    dealias[nx // 3 : 2 * nx // 3 + 1] = 0.0
+
     def nonlinear(u_hat):
-        u = np.fft.ifft(u_hat).real
-        return -0.5 * 1j * k * np.fft.fft(u**2)
+        u = np.fft.ifft(u_hat * dealias).real
+        return -0.5 * 1j * k * np.fft.fft(u**2) * dealias
 
     def etdrk4_step(u_hat, E, E2, Q, f1, f2, f3):
         Nu = nonlinear(u_hat)
@@ -368,7 +372,7 @@ def generate_ks():
     print("Generating Kuramoto-Sivashinsky 1D references...")
     nx_hi = 1024
     nx_lo = 256
-    t_final = 50.0
+    t_final = 200.0
 
     t_coords = np.linspace(t_final / N_SNAPSHOTS, t_final, N_SNAPSHOTS)
     np.save(REF_DIR / "ks_1d_t_coordinates.npy", t_coords)
