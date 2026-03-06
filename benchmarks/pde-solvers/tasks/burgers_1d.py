@@ -8,7 +8,7 @@ Time: 10 trajectory snapshots up to t_final = 5.0
 
 Scoring: nRMSE = ||pred - ref||_2 / ||ref||_2 over full trajectories,
 averaged across 20 test instances. Score = 1/(1 + avg_nRMSE).
-Runtime budget: 2 seconds for the full batch (20 instances).
+Runtime budget: 0.25 seconds for the full batch (20 instances).
 
 Input:
   u0_batch: [batch_size, 128] initial conditions

@@ -6,8 +6,8 @@ Evolutionary code generation for numerical PDE solvers. Uses fanout's multi-mode
 
 | Task | PDE | Difficulty | Grid | Instances | Runtime Budget | Baseline Score |
 |------|-----|------------|------|-----------|----------------|----------------|
-| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | 2s | ~0.65 |
-| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | 10s | ~0.56 |
+| `burgers_1d` | 1D Burgers (nu=0.01, t=5) | Easy | 128 | 20 | 0.25s | ~0.65 |
+| `navier_stokes_2d` | 2D Navier-Stokes vorticity (t=10) | Medium | 64x64 | 20 | 3s | ~0.56 |
 | `ks_1d` | 1D Kuramoto-Sivashinsky (t=50) | Hard | 256 | 20 | 10s | ~0.27 |
 
 ## Metric
@@ -17,7 +17,7 @@ Following [CodePDE (arXiv:2505.08783)](https://arxiv.org/abs/2505.08783):
 - **nRMSE** = `||pred - ref||_2 / ||ref||_2` (L2 norm ratio over full trajectory)
 - **Score** = `1 / (1 + avg_nRMSE)` averaged across 20 instances per task
 - Evaluation uses 10 trajectory snapshots (not just final state)
-- **Runtime penalty**: solutions exceeding the time budget are penalized by `score *= budget / elapsed`
+- **Runtime penalty**: solutions exceeding the time budget are penalized by `score *= (budget / elapsed)²`
 
 ## Solver Interface
 

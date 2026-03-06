@@ -51,13 +51,13 @@ TASK_CONFIGS = {
         "n_instances": N_INSTANCES,
         "extra_args": {"nu": 0.01},
         "timeout": 120,
-        "runtime_budget": 2.0,
+        "runtime_budget": 0.25,
     },
     "navier_stokes_2d": {
         "n_instances": N_INSTANCES,
         "extra_args": {"nu": 1e-3},
         "timeout": 300,
-        "runtime_budget": 10.0,
+        "runtime_budget": 3.0,
     },
     "ks_1d": {
         "n_instances": N_INSTANCES,
@@ -158,12 +158,12 @@ def eval_task(sol, task_name: str) -> float:
     avg_nrmse = np.mean(errors)
     score = 1.0 / (1.0 + avg_nrmse)
 
-    # Apply runtime penalty: if over budget, scale score by (budget / elapsed)
+    # Apply runtime penalty: if over budget, scale score by (budget / elapsed)^2
     if elapsed > runtime_budget:
-        penalty = runtime_budget / elapsed
+        penalty = (runtime_budget / elapsed) ** 2
         penalized_score = score * penalty
         print(
-            f"  OVER BUDGET: {elapsed:.1f}s > {runtime_budget:.0f}s, "
+            f"  OVER BUDGET: {elapsed:.1f}s > {runtime_budget:.1f}s, "
             f"penalty={penalty:.3f}, score {score:.4f} -> {penalized_score:.4f}",
             file=sys.stderr,
         )
