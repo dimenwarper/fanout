@@ -16,19 +16,40 @@ from fanout.store import Store
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 _SYNTHESIZE_PROMPT = """\
-You are a research assistant synthesizing a shared memory bank for coding agents.
+Synthesize these agent memory entries into a compact bullet-point brief.
+Format: 5-8 bullets max, ~150 words total. No headers, no prose, no markdown formatting.
+Each bullet: one concrete finding with score if available.
+Include both what worked AND what failed — failures are valuable.
+Do NOT include code snippets. Focus on technique names and scores only."""
 
-Below are raw memory entries (observations, hypotheses, learnings, strategies) \
-written by multiple agents working on the same task. Synthesize them into a \
-concise, actionable brief. Focus on:
+# Keep at most this many memories for synthesis input to avoid bloating the
+# synthesizer context (and, downstream, the agent prompt).  This is deliberately
+# lax — we want to preserve insights about failures, not just top scores.
+_MAX_MEMORIES_FOR_SYNTHESIS = 40
 
-1. **What works** — approaches and techniques that scored well
-2. **What doesn't work** — failed approaches and why they failed
-3. **Key insights** — task-specific observations that should inform the next attempt
-4. **Best strategy going forward** — what to try next based on all evidence
 
-Drop redundant or low-value entries. Be concise — aim for a short briefing, \
-not a dump of everything. Include scores where relevant."""
+def _prefilter_memories(memories: list[Memory]) -> list[Memory]:
+    """Deduplicate and lightly prune memories before synthesis.
+
+    Strategy: keep the *latest* memory per (agent_id, memory_type) pair, then
+    cap at ``_MAX_MEMORIES_FOR_SYNTHESIS`` by dropping the oldest entries first.
+    This is intentionally lax — we keep failures and low-score learnings because
+    knowing what doesn't work is as valuable as knowing what does.
+    """
+    # Deduplicate: latest per (agent, type)
+    seen: dict[tuple[str, str], Memory] = {}
+    for mem in memories:
+        key = (mem.agent_id, mem.memory_type)
+        if key not in seen or mem.created_at > seen[key].created_at:
+            seen[key] = mem
+    deduped = list(seen.values())
+
+    # Sort by creation time (oldest first) and keep most recent up to cap
+    deduped.sort(key=lambda m: m.created_at)
+    if len(deduped) > _MAX_MEMORIES_FOR_SYNTHESIS:
+        deduped = deduped[-_MAX_MEMORIES_FOR_SYNTHESIS:]
+
+    return deduped
 
 
 def _synthesize_memories(
@@ -36,15 +57,17 @@ def _synthesize_memories(
     model: str = "google/gemini-2.0-flash-001",
     api_key: str | None = None,
 ) -> str | None:
-    """Call a cheap LLM to synthesize raw memories into an actionable brief."""
+    """Call a cheap LLM to synthesize raw memories into a compact brief."""
     api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
         return None
 
+    filtered = _prefilter_memories(memories)
+
     lines: list[str] = []
-    for mem in memories:
+    for mem in filtered:
         score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
-        lines.append(f"[{mem.memory_type.upper()}] {mem.agent_id}{score_str}: {mem.content}")
+        lines.append(f"[{mem.memory_type.upper()}]{score_str}: {mem.content}")
     raw = "\n".join(lines)
 
     try:
@@ -57,7 +80,7 @@ def _synthesize_memories(
                     {"role": "user", "content": raw},
                 ],
                 "temperature": 0.2,
-                "max_tokens": 1024,
+                "max_tokens": 384,
             },
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -336,7 +359,7 @@ class ReadMemoriesTool(Tool):
         if synthesis:
             return f"=== Synthesized Briefing ({len(memories)} memories) ===\n\n{synthesis}"
 
-        return self._raw_dump(memories)
+        return self._raw_dump(_prefilter_memories(memories))
 
 
 class ReadPromptTool(Tool):

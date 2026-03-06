@@ -259,8 +259,6 @@ def memory_step(ctx: WorkflowContext) -> None:
         return
 
     best = ctx.selected[0]
-    extracted = extract_solution(best.solution.output)
-    preview = extracted[:300] + ("..." if len(extracted) > 300 else "")
 
     ctx.store.save_memory(Memory(
         run_id=ctx.run.id,
@@ -268,7 +266,7 @@ def memory_step(ctx: WorkflowContext) -> None:
         memory_type="learning",
         content=(
             f"Round {ctx.round_num} best (score={best.aggregate_score:.3f}, "
-            f"model={best.solution.model}): {preview}"
+            f"model={best.solution.model}). Use read_solutions to see code."
         ),
         solution_id=best.solution.id,
         score=best.aggregate_score,
@@ -366,7 +364,7 @@ def evolve_step(ctx: WorkflowContext) -> None:
         if ctx.use_memory:
             memories = ctx.store.get_memories_for_run(ctx.run.id)
             if memories:
-                from fanout.agent_tools import _synthesize_memories
+                from fanout.agent_tools import _synthesize_memories, _prefilter_memories
 
                 synthesis = _synthesize_memories(
                     memories,
@@ -375,9 +373,10 @@ def evolve_step(ctx: WorkflowContext) -> None:
                 if synthesis:
                     prefix = f"=== Learnings from Previous Rounds ===\n{synthesis}\n=== End of Learnings ===\n\n"
                 else:
-                    # Fallback to raw dump if synthesis fails
+                    # Fallback to raw dump (pre-filtered) if synthesis fails
+                    filtered = _prefilter_memories(memories)
                     lines = ["=== Learnings from Previous Rounds ==="]
-                    for mem in memories:
+                    for mem in filtered:
                         score_str = f" (score={mem.score:.3f})" if mem.score is not None else ""
                         lines.append(f"[{mem.memory_type}]{score_str}: {mem.content}")
                     lines.append("=== End of Learnings ===\n")
