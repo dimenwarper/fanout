@@ -87,7 +87,9 @@ class DarwinianStrategy(BaseStrategy):
         # Compute per-candidate weight
         weights: list[float] = []
         for c in candidates:
-            sigmoid = 1.0 / (1.0 + math.exp(-sharpness * (c.aggregate_score - mid)))
+            x = -sharpness * (c.aggregate_score - mid)
+            x = max(-500.0, min(500.0, x))
+            sigmoid = 1.0 / (1.0 + math.exp(x))
             n_used = sel_counts.get(c.solution.id, 0)
             novelty = 1.0 / (1.0 + novelty_weight * n_used)
             weights.append(sigmoid * novelty)

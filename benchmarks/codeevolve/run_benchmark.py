@@ -232,30 +232,45 @@ def main():
             console.print(f"[red]Unknown task: {task_name}[/]")
             continue
         for strategy in args.strategy:
-            result = run_task(
-                task_name,
-                TASKS[task_name],
-                models=models,
-                model_set=args.model_set,
-                n_samples=args.n_samples,
-                strategy=strategy,
-                rounds=args.rounds,
-                k=args.k,
-                k_agg=args.k_agg,
-                temperature=args.temperature,
-                max_tokens=args.max_tokens,
-                solution_format=args.solution_format,
-                eval_concurrency=args.eval_concurrency,
-                eval_timeout=args.eval_timeout,
+            try:
+                result = run_task(
+                    task_name,
+                    TASKS[task_name],
+                    models=models,
+                    model_set=args.model_set,
+                    n_samples=args.n_samples,
+                    strategy=strategy,
+                    rounds=args.rounds,
+                    k=args.k,
+                    k_agg=args.k_agg,
+                    temperature=args.temperature,
+                    max_tokens=args.max_tokens,
+                    solution_format=args.solution_format,
+                    eval_concurrency=args.eval_concurrency,
+                    eval_timeout=args.eval_timeout,
                 verbose=args.verbose,
                 full=args.full,
                 mode=args.mode,
                 n_agents=args.n_agents,
                 max_steps=args.max_steps,
                 use_memory=args.memory,
-                store=shared_store,
-            )
-            results.append(result)
+                    store=shared_store,
+                )
+                results.append(result)
+            except Exception as e:
+                console.print(f"[red]Error on {task_name}/{strategy}: {e}[/]")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    "task": task_name,
+                    "strategy": strategy,
+                    "mode": args.mode,
+                    "iterations": args.max_steps if args.mode == "agent" else args.rounds,
+                    "best_score": 0.0,
+                    "benchmark": TASKS[task_name].get("benchmark"),
+                    "round_scores": [],
+                    "run_id": "error",
+                })
 
     # Summary table
     console.print()
