@@ -67,6 +67,16 @@ We iteratively tightened the benchmark as frontier models found ways to score ne
 
 **Key insight**: The hardest lever for spectral PDE solvers isn't the runtime budget — it's the gap between the evaluation grid and the reference grid. On a larger domain with the same grid, there aren't enough points to resolve all active chaotic modes, so even the "right" algorithm accumulates error.
 
+## Results (diverse model set, darwinian strategy, 20 agent steps)
+
+| Task | Baseline | Best Score | Winning Technique |
+|------|----------|------------|-------------------|
+| `burgers_1d` | 0.65 | **0.9974** | ETDRK4 + 2x upsample (128→256) + 2/3 dealiasing, 0.14s |
+| `navier_stokes_2d` | 0.56 | **0.9867** | RK4 + integrating factors + 3/2 padding (64→96), 2.09s |
+| `ks_1d` | 0.15 | **0.7627** | ETDRK4 + 3/2 padding (256→384), dt=0.5 |
+
+*Note: These scores were achieved under v6 budgets (0.25s, 3s, 10s). Under v7 budgets (0.1s, 1.5s, 10s), the Burgers and NS winners would be penalized to ~0.47 and ~0.48 respectively — below baseline — forcing native-resolution innovation.*
+
 ## Dependencies
 
 Only `numpy` and `scipy` — both included in `[benchmarks]` optional deps.
