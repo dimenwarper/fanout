@@ -50,6 +50,22 @@ uv run --extra benchmarks python benchmarks/pde-solvers/run_benchmark.py --tasks
 
 The baselines use explicit Euler finite differences — deliberately mediocre. LLMs can improve by using better numerical methods, but must stay within the runtime budget (no brute-force upsampling).
 
+## Benchmark Hardening Log
+
+We iteratively tightened the benchmark as frontier models found ways to score near-perfectly:
+
+| Version | Change | Burgers | NS | KS | Problem |
+|---------|--------|---------|----|----|---------|
+| v0 | Initial: 3 instances, final-state eval, range-based nRMSE | — | — | — | Too few instances, easy metric |
+| v1 | CodePDE alignment: 20 instances, 10 trajectory snapshots, L2 nRMSE, batched eval | 0.65 | 0.56 | 0.27 | Baseline scores calibrated |
+| v2 | Strip method hints from task files (no "spectral", "FFT", etc.) | — | — | — | LLMs were copying reference algorithms |
+| v3 | Add runtime budgets (10s, 30s, 30s) + linear penalty | 0.65 | 0.56 | 0.27 | Prevent brute-force upsampling |
+| v4 | Tighten budgets (2s, 10s, 10s) | 0.65 | 0.56 | 0.27 | Upsampled solutions (128→512, 64→128) still fit in budget |
+| v5 | Tighten further (0.25s, 3s, 10s) + quadratic penalty `(budget/elapsed)²` | 0.65 | 0.56 | 0.15 | Upsampling now penalized below baseline; KS still trivial at native res |
+| v6 | KS: domain 32π→64π, t_final 50→200 | 0.65 | 0.56 | 0.15 | Even perfect ETDRK4 at 256pts scores ~0.51 due to resolution gap vs 1024pt reference |
+
+**Key insight**: The hardest lever for spectral PDE solvers isn't the runtime budget — it's the gap between the evaluation grid and the reference grid. On a larger domain with the same grid, there aren't enough points to resolve all active chaotic modes, so even the "right" algorithm accumulates error.
+
 ## Dependencies
 
 Only `numpy` and `scipy` — both included in `[benchmarks]` optional deps.
