@@ -140,23 +140,12 @@ def plot_strategy_comparison():
 
 def plot_progression():
     """Line plots: step-by-step score progression, alphaevolve vs darwinian."""
+    alpha_scores = load_scores("diverse_model_set_full_run")
     darw_scores = load_scores("diverse_model_set_darwinian")
-    alpha_results = load_results("diverse_model_set_full_run")
-    darw_results = load_results("diverse_model_set_darwinian")
 
-    # AlphaEvolve final scores
-    alpha_final: dict[str, float] = {}
-    for r in alpha_results:
-        alpha_final[r["task"]] = r["best_score"]
-
-    # Darwinian final scores (from results.json — may differ from last csv step)
-    darw_final: dict[str, float] = {}
-    for r in darw_results:
-        darw_final[r["task"]] = r["best_score"]
-
-    # Benchmarks
+    # Benchmarks from results.json
     benchmarks: dict[str, float] = {}
-    for r in alpha_results + darw_results:
+    for r in load_results("diverse_model_set_full_run") + load_results("diverse_model_set_darwinian"):
         bench = r.get("benchmark")
         if bench is not None and not isinstance(bench, str):
             benchmarks[r["task"]] = bench
@@ -166,21 +155,32 @@ def plot_progression():
 
     for idx, task in enumerate(TASK_ORDER):
         ax = axes[idx // 2][idx % 2]
+        ymin_vals = [0.0]
+        ymax_vals = [0.0]
+
+        # AlphaEvolve step-by-step
+        if task in alpha_scores:
+            steps = np.array(alpha_scores[task]["steps"])
+            scores = np.array(alpha_scores[task]["scores"])
+            ax.plot(steps, scores, color=STRATEGY_COLORS["alphaevolve"], linewidth=2, label="AlphaEvolve", zorder=3)
+            ax.scatter(steps[-1], scores[-1], color=STRATEGY_COLORS["alphaevolve"], s=50, zorder=4)
+            ax.annotate(f"{scores[-1]:.4g}", (steps[-1], scores[-1]),
+                        textcoords="offset points", xytext=(-40, 8),
+                        fontsize=8, fontweight="bold", color=STRATEGY_COLORS["alphaevolve"])
+            ymin_vals.append(scores.min())
+            ymax_vals.append(scores.max())
 
         # Darwinian step-by-step
-        has_data = task in darw_scores
-        if has_data:
+        if task in darw_scores:
             steps = np.array(darw_scores[task]["steps"])
             scores = np.array(darw_scores[task]["scores"])
             ax.plot(steps, scores, color=STRATEGY_COLORS["darwinian"], linewidth=2, label="Darwinian", zorder=3)
             ax.scatter(steps[-1], scores[-1], color=STRATEGY_COLORS["darwinian"], s=50, zorder=4)
-
-        # AlphaEvolve as horizontal line (only final score known)
-        if task in alpha_final:
-            ax.axhline(
-                alpha_final[task], color=STRATEGY_COLORS["alphaevolve"],
-                linestyle="-", linewidth=2, alpha=0.8, label=f"AlphaEvolve ({alpha_final[task]:.4g})",
-            )
+            ax.annotate(f"{scores[-1]:.4g}", (steps[-1], scores[-1]),
+                        textcoords="offset points", xytext=(-40, -14),
+                        fontsize=8, fontweight="bold", color=STRATEGY_COLORS["darwinian"])
+            ymin_vals.append(scores.min())
+            ymax_vals.append(scores.max())
 
         # Benchmark line
         if task in benchmarks:
@@ -188,6 +188,7 @@ def plot_progression():
                 benchmarks[task], color="black",
                 linestyle="--", linewidth=1, alpha=0.5, label=f"Benchmark ({benchmarks[task]:.4g})",
             )
+            ymax_vals.append(benchmarks[task])
 
         ax.set_title(TASK_LABELS[task], fontsize=12)
         ax.set_xlabel("Step")
@@ -195,15 +196,9 @@ def plot_progression():
         ax.legend(fontsize=9, loc="lower right")
         ax.grid(True, alpha=0.3)
 
-        # Set y-axis with some padding
-        ymin = min(0, scores.min() if has_data else 0)
-        ymax_vals = [scores.max() if has_data else 0]
-        if task in alpha_final:
-            ymax_vals.append(alpha_final[task])
-        if task in benchmarks:
-            ymax_vals.append(benchmarks[task])
+        ymin = min(ymin_vals)
         ymax = max(ymax_vals)
-        margin = (ymax - ymin) * 0.1
+        margin = (ymax - ymin) * 0.1 if ymax > ymin else 0.1
         ax.set_ylim(ymin - margin, ymax + margin)
 
     plt.tight_layout()
