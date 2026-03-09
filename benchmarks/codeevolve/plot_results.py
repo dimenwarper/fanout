@@ -158,8 +158,8 @@ def plot_progression():
     # Benchmarks from results.json
     benchmarks: dict[str, float] = {}
     for r in load_results("diverse_model_set_full_run") + load_results("diverse_model_set_darwinian"):
-        bench = r.get("benchmark")
-        if bench is not None and not isinstance(bench, str):
+        bench = parse_benchmark(r.get("benchmark"))
+        if bench is not None:
             benchmarks[r["task"]] = bench
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
