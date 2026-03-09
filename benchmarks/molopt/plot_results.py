@@ -105,7 +105,7 @@ def plot_progression():
             ymax_vals.append(benchmarks[task])
 
         ax.set_title(TASK_LABELS[task], fontsize=12)
-        ax.set_xlabel("Step")
+        ax.set_xlabel("Solutions Submitted")
         ax.set_ylabel("Best Score")
         ax.legend(fontsize=9, loc="lower right")
         ax.grid(True, alpha=0.3)

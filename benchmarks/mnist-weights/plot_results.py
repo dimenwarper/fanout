@@ -95,7 +95,7 @@ def plot_progression():
         ymax_vals.append(benchmarks[task])
 
     ax.set_title("Classify All Digits", fontsize=12)
-    ax.set_xlabel("Step")
+    ax.set_xlabel("Solutions Submitted")
     ax.set_ylabel("Best Score (Accuracy)")
     ax.legend(fontsize=10, loc="lower right")
     ax.grid(True, alpha=0.3)
