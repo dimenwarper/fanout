@@ -47,9 +47,9 @@ def parse_benchmark(value) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    # Try to extract a number from a string
-    m = re.search(r"[\d.]+", str(value))
-    return float(m.group()) if m else None
+    # Try to extract the last number from a string (e.g. "1/C1 > 0.665" -> 0.665)
+    matches = re.findall(r"[\d.]+", str(value))
+    return float(matches[-1]) if matches else None
 
 
 def load_results(run_name: str) -> list[dict]:
