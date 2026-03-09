@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 import csv
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,6 +39,17 @@ STRATEGY_COLORS = {
     "top-k": "#FFC000",
     "darwinian": "#C00000",
 }
+
+
+def parse_benchmark(value) -> float | None:
+    """Extract a numeric benchmark from a value that may be a string like '1/C1 > 0.665'."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    # Try to extract a number from a string
+    m = re.search(r"[\d.]+", str(value))
+    return float(m.group()) if m else None
 
 
 def load_results(run_name: str) -> list[dict]:
@@ -81,8 +93,8 @@ def plot_strategy_comparison():
         task = r["task"]
         strategy = r["strategy"]
         scores[(task, strategy)] = r["best_score"]
-        bench = r.get("benchmark")
-        if bench is not None and not isinstance(bench, str):
+        bench = parse_benchmark(r.get("benchmark"))
+        if bench is not None:
             benchmarks[task] = bench
 
     strategies = ["island", "rsa", "top-k", "alphaevolve", "darwinian"]
