@@ -15,7 +15,7 @@ python tldr.py
 
 So basically:
 
-**Any-opt map/reduce primitives for agents**
+**Self-improvement primitives for agents**
 
 Fanout is directly inspired my methods like GEPA and Alphaevolve, but gives more fine-grained control over the sampling, agentic optimizaiton, selection, and aggregation components of each to an orchestrating agent, like e.g. Claude Code (see claude/skill), allowing model sets, different materializer strategies for evaluation, among other things. This is useful any time you want to treat LLM outputs as a population rather than a single shot: code generation, prompt engineering, config tuning, creative writing, or any task where quality varies across models and samples. I'm considering adding backends to this as well, so you get large compute when needed.
 
