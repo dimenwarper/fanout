@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -18,8 +19,16 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 BENCH_DIR = Path(__file__).resolve().parent
-SOL_DIR = BENCH_DIR / "runs" / "diverse_model_set_full_run" / "solutions"
+RUN_DIR = BENCH_DIR / "runs" / "diverse_model_set_full_run"
+SOL_DIR = RUN_DIR / "solutions"
 OUT_DIR = BENCH_DIR / "plots"
+
+
+def load_recorded_scores() -> dict[str, float]:
+    """Load best scores from results.json (the actual benchmark scores)."""
+    with open(RUN_DIR / "results.json") as f:
+        results = json.load(f)
+    return {r["task"]: r["best_score"] for r in results}
 
 DARK_BG = "#0D1117"
 PANEL_BG = "#161B22"
@@ -48,9 +57,10 @@ def style_ax(ax):
         spine.set_color(BORDER_COLOR)
 
 
-def plot_circle_packing():
+def plot_circle_packing(recorded_scores: dict[str, float]):
     mod = load_module(SOL_DIR / "circle_packing_1.py")
     result = mod.circle_packing26()  # (26, 3): x, y, r
+    best_score = recorded_scores.get("circle_packing", np.sum(result[:, 2]))
 
     fig, ax = plt.subplots(figsize=(8, 8))
     fig.patch.set_facecolor(DARK_BG)
@@ -83,7 +93,7 @@ def plot_circle_packing():
     ax.set_xlim(-0.05, 1.05)
     ax.set_ylim(-0.05, 1.05)
     ax.set_aspect("equal")
-    ax.set_title(f"Circle Packing (26 circles)  |  Sum of radii = {total_radii:.4f}",
+    ax.set_title(f"Circle Packing (26 circles)  |  Best sum of radii = {best_score:.4f}",
                  fontsize=13, fontweight="bold", pad=12)
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -95,7 +105,7 @@ def plot_circle_packing():
     plt.close(fig)
 
 
-def plot_heilbronn_triangle():
+def plot_heilbronn_triangle(recorded_scores: dict[str, float]):
     mod = load_module(SOL_DIR / "heilbronn_triangle_1.py")
     points = mod.heilbronn_triangle11()  # (11, 2)
 
@@ -146,7 +156,8 @@ def plot_heilbronn_triangle():
     ax.set_xlim(-0.05, 1.05)
     ax.set_ylim(-0.05, np.sqrt(3) / 2 + 0.05)
     ax.set_aspect("equal")
-    ax.set_title(f"Heilbronn Triangle (11 points)  |  Min normalized area = {min_area:.6f}",
+    best_score = recorded_scores.get("heilbronn_triangle", min_area)
+    ax.set_title(f"Heilbronn Triangle (11 points)  |  Best min area = {best_score:.6f}",
                  fontsize=13, fontweight="bold", pad=12)
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -165,9 +176,10 @@ def plot_heilbronn_triangle():
     plt.close(fig)
 
 
-def plot_kissing_number():
+def plot_kissing_number(recorded_scores: dict[str, float]):
     mod = load_module(SOL_DIR / "kissing_number_1.py")
     points = mod.kissing_number11()  # (N, 11)
+    best_n = int(recorded_scores.get("kissing_number", len(points)))
 
     n = len(points)
     norms = np.linalg.norm(points, axis=1)
@@ -224,7 +236,7 @@ def plot_kissing_number():
              color=TEXT_COLOR, fontfamily="monospace",
              bbox=dict(boxstyle="round,pad=0.5", facecolor=PANEL_BG, edgecolor=BORDER_COLOR))
 
-    fig.suptitle(f"Kissing Number in 11D  |  {n} points  |  Score = {n}",
+    fig.suptitle(f"Kissing Number in 11D  |  Best score = {best_n} points",
                  fontsize=14, fontweight="bold", color=TEXT_COLOR, y=1.02)
 
     plt.tight_layout()
@@ -233,7 +245,7 @@ def plot_kissing_number():
     plt.close(fig)
 
 
-def plot_first_autocorr():
+def plot_first_autocorr(recorded_scores: dict[str, float]):
     mod = load_module(SOL_DIR / "first_autocorr_1.py")
     a = mod.first_autocorrelation()  # 1D array
 
@@ -297,7 +309,8 @@ def plot_first_autocorr():
             verticalalignment="top", linespacing=1.8,
             bbox=dict(boxstyle="round,pad=0.8", facecolor=PANEL_BG, edgecolor=BORDER_COLOR))
 
-    fig.suptitle(f"First Autocorrelation  |  1/C1 = {inv_c1:.6f}",
+    best_score = recorded_scores.get("first_autocorr", inv_c1)
+    fig.suptitle(f"First Autocorrelation  |  Best 1/C1 = {best_score:.6f}",
                  fontsize=14, fontweight="bold", color=TEXT_COLOR)
 
     plt.tight_layout()
@@ -307,8 +320,9 @@ def plot_first_autocorr():
 
 
 if __name__ == "__main__":
-    plot_circle_packing()
-    plot_heilbronn_triangle()
-    plot_kissing_number()
-    plot_first_autocorr()
+    scores = load_recorded_scores()
+    plot_circle_packing(scores)
+    plot_heilbronn_triangle(scores)
+    plot_kissing_number(scores)
+    plot_first_autocorr(scores)
     print("Done.")
