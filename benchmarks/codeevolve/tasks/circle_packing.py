@@ -3,14 +3,10 @@
 Objective: Place 26 non-overlapping circles inside the unit square [0,1]x[0,1]
 to maximize the sum of their radii.
 
-Benchmark (AlphaEvolve): sum_radii = 2.6358627564136983
-
 Output: numpy array of shape (26, 3) where each row is (x, y, radius).
 """
 
 import numpy as np
-
-BENCHMARK_VALUE = 2.6358627564136983
 NUM_CIRCLES = 26
 
 

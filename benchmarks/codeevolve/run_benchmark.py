@@ -76,7 +76,6 @@ def build_prompt(task_name: str, task_info: dict) -> str:
     return (
         f"{task_source}\n\n"
         f"Improve the function `{task_info['function']}()` to achieve the best possible score. "
-        f"The benchmark to beat is: {task_info['benchmark']}.\n\n"
         f"Keep the same function name and signature. You may use numpy."
     )
 
