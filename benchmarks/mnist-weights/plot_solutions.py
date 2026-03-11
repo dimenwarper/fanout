@@ -85,25 +85,28 @@ def plot_solution(sol_name: str, weights: dict, subtitle: str):
     acc = np.mean(preds == y_test)
     cm = confusion_matrix(y_test, preds, labels=range(10))
 
-    # Layout: top row = W1 feature maps, bottom row = confusion matrix
-    n_cols = min(n_hidden, 16)
-    fig_w = max(12, n_cols * 1.2)
+    # Layout: 4-column grid of feature maps + confusion matrix
+    n_feat = min(n_hidden, 16)
+    grid_rows = int(np.ceil(n_feat / 4))
 
-    fig = plt.figure(figsize=(fig_w, 7))
+    fig = plt.figure(figsize=(10, 2.5 * grid_rows + 4.5))
     fig.patch.set_facecolor(DARK_BG)
 
-    gs = gridspec.GridSpec(2, 1, figure=fig, height_ratios=[1, 1.3], hspace=0.35)
+    gs = gridspec.GridSpec(2, 1, figure=fig,
+                           height_ratios=[grid_rows, 2], hspace=0.3)
 
-    # ── Top: W1 columns as 8×8 feature maps ──
-    gs_top = gridspec.GridSpecFromSubplotSpec(1, n_cols, subplot_spec=gs[0], wspace=0.08)
+    # ── Top: W1 columns as 8×8 feature maps in a 4-column grid ──
+    gs_top = gridspec.GridSpecFromSubplotSpec(grid_rows, 4, subplot_spec=gs[0],
+                                              wspace=0.12, hspace=0.3)
     vmax = np.abs(W1).max()
-    for i in range(n_cols):
-        ax = fig.add_subplot(gs_top[0, i])
+    for i in range(n_feat):
+        r, c = divmod(i, 4)
+        ax = fig.add_subplot(gs_top[r, c])
         ax.imshow(W1[:, i].reshape(8, 8), cmap="RdBu_r", vmin=-vmax, vmax=vmax,
                   interpolation="nearest")
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title(f"h{i}", fontsize=7, color=TEXT_COLOR, pad=2)
+        ax.set_title(f"h{i}", fontsize=8, color=TEXT_COLOR, pad=2)
         for spine in ax.spines.values():
             spine.set_color(BORDER_COLOR)
             spine.set_linewidth(0.5)
