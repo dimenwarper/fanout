@@ -17,9 +17,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
-from sklearn.datasets import load_digits
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
 
 BENCH_DIR = Path(__file__).resolve().parent
 SOL_DIR = BENCH_DIR / "runs" / "test" / "solutions"
@@ -52,56 +49,22 @@ def style_ax(ax):
         spine.set_color(BORDER_COLOR)
 
 
-def get_test_data():
-    digits = load_digits()
-    X = digits.data / 16.0
-    y = digits.target
-    _, X_test, _, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
-    return X_test, y_test
-
-
-def elu(x, alpha=1.0):
-    return np.where(x > 0, x, alpha * (np.exp(np.clip(x, -50, 0)) - 1))
-
-
-def forward(weights, X):
-    """Flexible forward pass — infers shapes from the weight dict."""
-    W1 = np.array(weights["W1"], dtype=np.float32)
-    b1 = np.array(weights["b1"], dtype=np.float32)
-    W2 = np.array(weights["W2"], dtype=np.float32)
-    b2 = np.array(weights["b2"], dtype=np.float32)
-    h = elu(X @ W1 + b1)
-    return h @ W2 + b2
-
-
 def plot_solution(sol_name: str, weights: dict, subtitle: str):
-    X_test, y_test = get_test_data()
     W1 = np.array(weights["W1"], dtype=np.float32)
     n_hidden = W1.shape[1]
 
-    # Run predictions
-    logits = forward(weights, X_test)
-    preds = np.argmax(logits, axis=1)
-    acc = np.mean(preds == y_test)
-    cm = confusion_matrix(y_test, preds, labels=range(10))
-
-    # Layout: 4-column grid of feature maps + confusion matrix
+    # Layout: 4-column grid of feature maps
     n_feat = min(n_hidden, 16)
     grid_rows = int(np.ceil(n_feat / 4))
 
-    fig = plt.figure(figsize=(10, 2.5 * grid_rows + 4.5))
+    fig = plt.figure(figsize=(8, 2.2 * grid_rows + 0.8))
     fig.patch.set_facecolor(DARK_BG)
 
-    gs = gridspec.GridSpec(2, 1, figure=fig,
-                           height_ratios=[grid_rows, 2], hspace=0.3)
-
-    # ── Top: W1 columns as 8×8 feature maps in a 4-column grid ──
-    gs_top = gridspec.GridSpecFromSubplotSpec(grid_rows, 4, subplot_spec=gs[0],
-                                              wspace=0.12, hspace=0.3)
+    gs = gridspec.GridSpec(grid_rows, 4, figure=fig, wspace=0.12, hspace=0.3)
     vmax = np.abs(W1).max()
     for i in range(n_feat):
         r, c = divmod(i, 4)
-        ax = fig.add_subplot(gs_top[r, c])
+        ax = fig.add_subplot(gs[r, c])
         ax.imshow(W1[:, i].reshape(8, 8), cmap="RdBu_r", vmin=-vmax, vmax=vmax,
                   interpolation="nearest")
         ax.set_xticks([])
@@ -110,30 +73,6 @@ def plot_solution(sol_name: str, weights: dict, subtitle: str):
         for spine in ax.spines.values():
             spine.set_color(BORDER_COLOR)
             spine.set_linewidth(0.5)
-
-    # ── Bottom: confusion matrix ──
-    ax_cm = fig.add_subplot(gs[1])
-    style_ax(ax_cm)
-    im = ax_cm.imshow(cm, cmap="Blues", interpolation="nearest")
-
-    # Annotate cells
-    for i in range(10):
-        for j in range(10):
-            val = cm[i, j]
-            color = "white" if val > cm.max() / 2 else TEXT_COLOR
-            ax_cm.text(j, i, str(val), ha="center", va="center",
-                       fontsize=8, color=color, fontweight="bold" if i == j else "normal")
-
-    ax_cm.set_xticks(range(10))
-    ax_cm.set_yticks(range(10))
-    ax_cm.set_xlabel("Predicted", fontsize=10)
-    ax_cm.set_ylabel("True", fontsize=10)
-    ax_cm.set_title(f"Confusion Matrix  |  Accuracy = {acc:.1%}", fontsize=11,
-                    fontweight="bold", pad=8)
-
-    cb = fig.colorbar(im, ax=ax_cm, fraction=0.03, pad=0.02)
-    cb.ax.tick_params(colors=TEXT_COLOR, labelsize=7)
-    cb.outline.set_edgecolor(BORDER_COLOR)
 
     fig.suptitle(f"MNIST Weights: {sol_name}\n{subtitle}",
                  fontsize=13, fontweight="bold", color=TEXT_COLOR, y=1.02)
