@@ -210,7 +210,7 @@ def plot_task(task_name: str, cfg: dict, recorded_scores: dict[str, float]):
                 bbox=dict(boxstyle="round,pad=0.2", facecolor=PANEL_BG,
                           edgecolor=BORDER_COLOR, alpha=0.8))
 
-    title = f"MolOpt: {task_name.replace('_', ' ').title()}  |  Score = {best_score:.4f}"
+    title = f"MolOpt: {task_name.replace('_', ' ').title()}"
     fig.suptitle(title, fontsize=14, fontweight="bold", color=TEXT_COLOR, y=0.995)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
